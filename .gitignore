@@ -1,0 +1,35 @@
+# Logs
+*.log
+npm-debug.log*
+nohup.*
+
+.DS_Store
+
+# node-waf configuration
+.lock-wscript
+
+# Compiled binary addons (http://nodejs.org/api/addons.html)
+build/Release
+
+# Dependency directory
+node_modules
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# JetBrains IDE 
+.idea
+
+*.js
+*.js.map
+
+# Build directories
+dist
+
+# Development databases
+*.sqlite3
+
+options.sh

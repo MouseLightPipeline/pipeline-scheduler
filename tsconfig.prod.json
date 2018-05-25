@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig",
+  "compileOnSave": false,
+  "compilerOptions": {
+    "outDir": "dist",
+    "sourceMap": false
+    "skipLibCheck": true
+  },
+  "exclude": [
+    "sequelize-migrations",
+    "gulpfile.ts"
+  ]
+}
