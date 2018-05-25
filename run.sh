@@ -4,11 +4,9 @@ if [ -a "options.sh" ]; then
     source "options.sh"
 fi
 
-./migrate.sh
-
 export DEBUG=pipeline*
 
-nohup node server/pipelineApiApp.js &
+nohup node server/pipelineSchedulerApp.js &
 
 sleep 3
 

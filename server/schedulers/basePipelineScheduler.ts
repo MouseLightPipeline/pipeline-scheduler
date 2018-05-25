@@ -8,7 +8,6 @@ const debug = require("debug")("pipeline:coordinator-api:base-pipeline-scheduler
 import {updatePipelineStagePerformance} from "../data-model/sequelize/pipelineStagePerformance";
 import {ISchedulerInterface} from "./schedulerHub";
 import {PipelineWorkerClient} from "../graphql/client/pipelineWorkerClient";
-import {PipelineServerContext} from "../graphql/pipelineServerContext";
 import {IProject} from "../data-model/sequelize/project";
 import {CompletionResult, ExecutionStatus, ITaskExecution} from "../data-model/taskExecution";
 import {connectorForProject, ProjectDatabaseConnector} from "../data-access/sequelize/projectDatabaseConnector";
@@ -18,6 +17,7 @@ import {
 } from "../data-access/sequelize/stageTableConnector";
 import {ITaskArgument, ITaskDefinition, TaskArgumentType} from "../data-model/sequelize/taskDefinition";
 import {IPipelineWorker} from "../data-model/sequelize/pipelineWorker";
+import {PersistentStorageManager} from "../data-access/sequelize/databaseConnector";
 
 export const DefaultPipelineIdKey = "relative_path";
 
@@ -243,14 +243,12 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
     protected async updateInProcessStatus() {
         let inProcess = await this._outputStageConnector.loadInProcess();
 
-        let workerManager = new PipelineServerContext();
-
         if (inProcess.length > 0) {
             debug(`updating status of ${inProcess.length} in process tiles`);
 
             const updateList = new InProcessModifyList();
 
-            await Promise.all(inProcess.map(tile => this.updateOneExecutingTile(workerManager, tile, updateList)));
+            await Promise.all(inProcess.map(tile => this.updateOneExecutingTile(tile, updateList)));
 
             await this._outputStageConnector.updateTileStatus(updateList.ToUpdate);
 
@@ -262,8 +260,8 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         }
     }
 
-    private async updateOneExecutingTile(serverContext: PipelineServerContext, tile: IInProcessTileAttributes, updateList: InProcessModifyList): Promise<void> {
-        let workerForTask = await serverContext.getPipelineWorker(tile.worker_id);
+    private async updateOneExecutingTile(tile: IInProcessTileAttributes, updateList: InProcessModifyList): Promise<void> {
+        let workerForTask = await PersistentStorageManager.Instance().getPipelineWorker(tile.worker_id);
 
         const executionStatus = await PipelineWorkerClient.Instance().queryTaskExecution(workerForTask, tile.worker_task_execution_id);
 

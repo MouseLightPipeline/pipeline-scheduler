@@ -7,11 +7,11 @@ import {loadModels} from "./modelLoader";
 import {SequelizeOptions} from "../../options/coreServicesOptions";
 import {IProjectModel} from "../../data-model/sequelize/project";
 import {ITaskDefinitionModel} from "../../data-model/sequelize/taskDefinition";
+import {IPipelineWorker} from "../../data-model/sequelize/pipelineWorker";
 
 export interface IPipelineModels {
     TaskDefinitions?: ITaskDefinitionModel;
     TaskRepositories?: any;
-    // TaskExecutions?: any;
     PipelineWorkers?: any;
     Projects?: IProjectModel;
     PipelineStages?: any;
@@ -36,10 +36,6 @@ export class PersistentStorageManager {
         return this.pipelineDatabase && this.pipelineDatabase.isConnected;
     }
 
-    public get PipelineConnection() {
-        return this.pipelineDatabase.connection;
-    }
-
     public get TaskRepositories() {
         return this.pipelineDatabase.models.TaskRepositories;
     }
@@ -47,11 +43,7 @@ export class PersistentStorageManager {
     public get TaskDefinitions() {
         return this.pipelineDatabase.models.TaskDefinitions;
     }
-    /*
-    public get TaskExecutions() {
-        return this.pipelineDatabase.models.TaskExecutions;
-    }
-    */
+
     public get PipelineWorkers() {
         return this.pipelineDatabase.models.PipelineWorkers;
     }
@@ -71,6 +63,14 @@ export class PersistentStorageManager {
     public async initialize() {
         this.pipelineDatabase = await createConnection({});
         await authenticate(this.pipelineDatabase, "pipeline");
+    }
+
+    public getPipelineWorker(id: string): Promise<IPipelineWorker> {
+        return this.PipelineWorkers.findById(id);
+    }
+
+    public getPipelineWorkers(): Promise<IPipelineWorker[]> {
+        return this.PipelineWorkers.findAll({});
     }
 }
 

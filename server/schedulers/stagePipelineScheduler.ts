@@ -4,7 +4,6 @@ const fse = require("fs-extra");
 const debug = require("debug")("pipeline:coordinator-api:stage-pipeline-scheduler");
 
 import {PipelineWorkerClient} from "../graphql/client/pipelineWorkerClient";
-import {PipelineServerContext} from "../graphql/pipelineServerContext";
 import {IPipelineWorker} from "../data-model/sequelize/pipelineWorker";
 import {IProject} from "../data-model/sequelize/project";
 import {PersistentStorageManager} from "../data-access/sequelize/databaseConnector";
@@ -95,9 +94,7 @@ export abstract class PipelineScheduler extends BasePipelineScheduler {
     protected async performProcessing(): Promise<void> {
         let pipelineStages = PersistentStorageManager.Instance().PipelineStages;
 
-        let workerManager = new PipelineServerContext();
-
-        let allWorkers = await workerManager.getPipelineWorkers();
+        let allWorkers = await PersistentStorageManager.Instance().getPipelineWorkers();
 
         // Use cluster proxies as last resort when behind.
         let workers = allWorkers.filter(worker => worker.is_in_scheduler_pool).sort((a, b) => {

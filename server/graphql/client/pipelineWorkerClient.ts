@@ -4,10 +4,9 @@ import "isomorphic-fetch";
 
 const debug = require("debug")("pipeline:coordinator-api:pipeline-worker-client");
 
-import {ITaskDefinitionAttributes} from "../../data-model/sequelize/taskDefinition";
 import {IPipelineWorker, PipelineWorkerStatus} from "../../data-model/sequelize/pipelineWorker";
-import {IWorkerMutationOutput, PipelineServerContext} from "../pipelineServerContext";
 import {ITaskExecutionAttributes} from "../../data-model/taskExecution";
+import {PersistentStorageManager} from "../../data-access/sequelize/databaseConnector";
 
 export interface ITaskExecutionStatus {
     workerResponded: boolean;
@@ -69,49 +68,10 @@ export class PipelineWorkerClient {
         return client;
     }
 
-    private async markWorkerUnavailable(worker: IPipelineWorker): Promise<void> {
-        let serverContext = new PipelineServerContext();
-
-        const row = await serverContext.getPipelineWorker(worker.id);
+    private static async markWorkerUnavailable(worker: IPipelineWorker): Promise<void> {
+        const row = await PersistentStorageManager.Instance().getPipelineWorker(worker.id);
 
         row.status = PipelineWorkerStatus.Unavailable;
-    }
-
-    public async queryTaskDefinition(worker: IPipelineWorker, taskId: string): Promise<ITaskDefinitionAttributes> {
-        const client = this.getClient(worker);
-
-        if (client === null) {
-            return null;
-        }
-
-        try {
-            let response: any = await client.query({
-                query: gql`
-                query($id: String!) {
-                    taskDefinition(id: $id) {
-                        id
-                        name
-                        description
-                        script
-                        interpreter
-                        script_args
-                        work_units
-                        log_prefix
-                    }
-                }`,
-                variables: {
-                    id: taskId
-                },
-                fetchPolicy: "network-only"
-            });
-
-            return response.data.taskDefinition;
-        } catch (err) {
-            console.log(err);
-            debug(`error querying task definition for worker ${worker.name}`);
-        }
-
-        return null;
     }
 
     public async queryTaskExecution(worker: IPipelineWorker, executionId: string): Promise<ITaskExecutionStatus> {
@@ -152,7 +112,7 @@ export class PipelineWorkerClient {
             taskExecutionStatus.taskExecution = response.data.taskExecution;
             taskExecutionStatus.workerResponded = true;
         } catch (err) {
-            await this.markWorkerUnavailable(worker);
+            await PipelineWorkerClient.markWorkerUnavailable(worker);
             debug(`error querying task status for worker ${worker.name}`);
         }
 
@@ -188,7 +148,7 @@ export class PipelineWorkerClient {
 
             return response.data.startTask;
         } catch (err) {
-            await this.markWorkerUnavailable(worker);
+            await PipelineWorkerClient.markWorkerUnavailable(worker);
             debug(`error submitting task to worker ${worker.name}`);
         }
 
@@ -219,7 +179,7 @@ export class PipelineWorkerClient {
 
             return {worker: response.data.updateWorker, error: null};
         } catch (err) {
-            await this.markWorkerUnavailable(worker);
+            await PipelineWorkerClient.markWorkerUnavailable(worker);
             debug(`error submitting update to worker ${worker.name}`);
 
             return {worker: null, error: err};
