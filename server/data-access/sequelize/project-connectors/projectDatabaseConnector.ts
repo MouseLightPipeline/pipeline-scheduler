@@ -1,15 +1,15 @@
-import {PersistentStorageManager} from "./databaseConnector";
+import {PersistentStorageManager} from "../databaseConnector";
 
 const sequelize = require("sequelize");
 const asyncUtils = require("async");
 import {Sequelize} from "sequelize";
 
-const debug = require("debug")("pipeline:coordinator-api:project-database-connector");
+const debug = require("debug")("pipeline:scheduler:project-database-connector");
 
-import {IProjectAttributes} from "../../data-model/sequelize/project";
-import {IPipelineStage, PipelineStageMethod} from "../../data-model/sequelize/pipelineStage";
+import {IProjectAttributes} from "../../../data-model/sequelize/project";
+import {IPipelineStage, PipelineStageMethod} from "../../../data-model/sequelize/pipelineStage";
 import {StageTableConnector} from "./stageTableConnector";
-import {SequelizeOptions} from "../../options/coreServicesOptions";
+import {SequelizeOptions} from "../../../options/coreServicesOptions";
 import {AdjacentTileStageConnector} from "./adjacentTileStageConnector";
 
 interface IAccessQueueToken {

@@ -3,22 +3,20 @@ import {startAdjacentPipelineStageWorker} from "./pipelineAdjacentSchedulerChild
 const path = require("path");
 const child_process = require("child_process");
 
-const debug = require("debug")("pipeline:coordinator-api:scheduler-hub");
+const debug = require("debug")("pipeline:scheduler:scheduler-hub");
 
 import {startTileStatusFileWorker} from "./projectPipelineSchedulerChildProcess";
 import {startMapPipelineStageWorker} from "./pipelineMapSchedulerChildProcess";
 import {PersistentStorageManager} from "../data-access/sequelize/databaseConnector";
 import {IProjectAttributes} from "../data-model/sequelize/project";
 import {IPipelineStage, PipelineStageMethod} from "../data-model/sequelize/pipelineStage";
+import {ITaskExecutionAttributes, IWorkerTaskExecutionAttributes} from "../data-model/taskExecution";
 
 export interface ISchedulerInterface {
-    OutputPath: string;
-
     IsExitRequested: boolean;
     IsProcessingRequested: boolean;
 
-    loadTileStatusForPlane(zIndex: number);
-    loadTileThumbnailPath(x: number, y: number, z: number): Promise<string>
+    onTaskExecutionComplete(executionInfo: ITaskExecutionAttributes): Promise<void>;
 }
 
 export class SchedulerHub {
@@ -36,6 +34,18 @@ export class SchedulerHub {
 
     public static get Instance(): SchedulerHub {
         return this._instance;
+    }
+
+    public async onTaskExecutionComplete(taskExecution: IWorkerTaskExecutionAttributes) {
+        try {
+            const worker = this._pipelineStageWorkers.get(taskExecution.pipeline_stage_id);
+
+            if (worker) {
+                await worker.onTaskExecutionComplete(taskExecution);
+            }
+        } catch (err) {
+            debug(err);
+        }
     }
 
     private readonly _useChildProcessWorkers: boolean;

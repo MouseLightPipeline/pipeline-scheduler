@@ -2,7 +2,7 @@ import * as _ from "lodash";
 
 const {performance} = require("perf_hooks");
 
-const debug = require("debug")("pipeline:coordinator-api:adjacent-scheduler");
+const debug = require("debug")("pipeline:scheduler:adjacent-scheduler");
 
 import {
     TilePipelineStatus,
@@ -10,12 +10,12 @@ import {
     IMuxTileLists
 } from "./basePipelineScheduler";
 import {IPipelineStage, PipelineStageMethod} from "../data-model/sequelize/pipelineStage";
-import {IPipelineTile, IPipelineTileAttributes} from "../data-access/sequelize/stageTableConnector";
+import {IPipelineTile, IPipelineTileAttributes} from "../data-access/sequelize/project-connectors/stageTableConnector";
 import {PipelineScheduler} from "./stagePipelineScheduler";
 import {
     AdjacentTileStageConnector, IAdjacentTile,
     IAdjacentTileAttributes
-} from "../data-access/sequelize/adjacentTileStageConnector";
+} from "../data-access/sequelize/project-connectors/adjacentTileStageConnector";
 import {IProject} from "../data-model/sequelize/project";
 import {IPipelineWorker} from "../data-model/sequelize/pipelineWorker";
 import {ITaskDefinition} from "../data-model/sequelize/taskDefinition";

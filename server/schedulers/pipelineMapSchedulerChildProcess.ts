@@ -2,7 +2,7 @@ import {PipelineMapScheduler} from "./pipelineMapScheduler";
 import {PersistentStorageManager} from "../data-access/sequelize/databaseConnector";
 import {IPipelineStage} from "../data-model/sequelize/pipelineStage";
 
-const debug = require("debug")("pipeline:coordinator-api:pipeline-map-worker-process");
+const debug = require("debug")("pipeline:scheduler:pipeline-map-worker-process");
 
 let stageId = process.argv.length > 2 ? process.argv[2] : null;
 

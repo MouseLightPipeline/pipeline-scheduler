@@ -1,16 +1,19 @@
 import * as  path from "path";
 
 const fse = require("fs-extra");
-const debug = require("debug")("pipeline:coordinator-api:stage-pipeline-scheduler");
+const debug = require("debug")("pipeline:scheduler:stage-pipeline-scheduler");
 
-import {PipelineWorkerClient} from "../graphql/client/pipelineWorkerClient";
+import {PipelineWorkerClient} from "../graphql/pipelineWorkerClient";
 import {IPipelineWorker} from "../data-model/sequelize/pipelineWorker";
 import {IProject} from "../data-model/sequelize/project";
 import {PersistentStorageManager} from "../data-access/sequelize/databaseConnector";
 import {IPipelineStage} from "../data-model/sequelize/pipelineStage";
-import {IToProcessTileAttributes, StageTableConnector} from "../data-access/sequelize/stageTableConnector";
+import {
+    IToProcessTileAttributes,
+    StageTableConnector
+} from "../data-access/sequelize/project-connectors/stageTableConnector";
 import {BasePipelineScheduler, DefaultPipelineIdKey, TilePipelineStatus} from "./basePipelineScheduler";
-import {ProjectDatabaseConnector} from "../data-access/sequelize/projectDatabaseConnector";
+import {ProjectDatabaseConnector} from "../data-access/sequelize/project-connectors/projectDatabaseConnector";
 import {updatePipelineStageCounts} from "../data-model/sequelize/pipelineStagePerformance";
 
 const MAX_KNOWN_INPUT_SKIP_COUNT = 1;
@@ -30,16 +33,8 @@ export abstract class PipelineScheduler extends BasePipelineScheduler {
         this._pipelineStage = pipelineStage;
     }
 
-    protected getOutputPath(): string {
-        return this._pipelineStage.dst_path;
-    }
-
     protected getStageId(): string {
         return this._pipelineStage.id;
-    }
-
-    protected getDepth(): number {
-        return this._pipelineStage.depth;
     }
 
     protected async createOutputStageConnector(connector: ProjectDatabaseConnector): Promise<StageTableConnector> {
@@ -63,7 +58,7 @@ export abstract class PipelineScheduler extends BasePipelineScheduler {
 
     protected async refreshTileStatus(): Promise<boolean> {
         // Check and update the status of anything in-process
-        await this.updateInProcessStatus();
+        // await this.updateInProcessStatus(); -- Handled by message queue now
 
         // Look if anything is already in the to-process queue
         let available: boolean = (await this._outputStageConnector.countToProcess()) > 0;
@@ -124,7 +119,9 @@ export abstract class PipelineScheduler extends BasePipelineScheduler {
         // The goal is to fill a worker completely before moving on to the next worker.
         await this.queue(workers, async (worker: IPipelineWorker) => {
 
-            let taskLoad = worker.task_load;
+            const real_time_worker = await PipelineWorkerClient.Instance().queryWorker(worker);
+
+            let taskLoad = real_time_worker ? real_time_worker.task_load : -1;
 
             if (taskLoad < 0) {
                 debug(`worker ${worker.name} skipped (unknown/unreported task load)`);
@@ -132,15 +129,6 @@ export abstract class PipelineScheduler extends BasePipelineScheduler {
             }
 
             const task = await PersistentStorageManager.Instance().TaskDefinitions.findById(this._pipelineStage.task_id);
-
-            /*
-            const clientTask = await PipelineWorkerClient.Instance().queryTaskDefinition(worker, this._pipelineStage.task_id);
-
-            if (!clientTask) {
-                debug(`could not get task definition ${this._pipelineStage.task_id} from worker ${worker.id}`);
-                return true;
-            }
-            */
 
             // TODO Get worker value for work units for this task, if applicable.
             const workUnits = worker.is_cluster_proxy ? 1 : task.work_units;

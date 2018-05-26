@@ -1,7 +1,7 @@
 import * as path from "path";
 const Sequelize = require("sequelize");
 
-const debug = require("debug")("pipeline:coordinator-api:database-connector");
+const debug = require("debug")("pipeline:scheduler:database-connector");
 
 import {loadModels} from "./modelLoader";
 import {SequelizeOptions} from "../../options/coreServicesOptions";

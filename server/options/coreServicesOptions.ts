@@ -6,7 +6,7 @@ const coreServicesOptions = {
         database: "pipeline_production",
         username: "postgres",
         password: "pgsecret",
-        logging: null,
+        logging: null as string,
         pool: {
             max: 30,
             min: 5,

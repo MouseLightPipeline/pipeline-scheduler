@@ -5,7 +5,7 @@ const fse = require("fs-extra");
 const path = require("path");
 import * as _ from "lodash";
 
-const debug = require("debug")("pipeline:coordinator-api:project-pipeline-scheduler");
+const debug = require("debug")("pipeline:scheduler:project-pipeline-scheduler");
 
 const pipelineInputJsonFile = "pipeline-input.json";
 const dashboardJsonFile = "dashboard.json";
@@ -19,9 +19,36 @@ import {IProject, IProjectAttributes} from "../data-model/sequelize/project";
 import {
     IPipelineTile, IPipelineTileAttributes,
     StageTableConnector
-} from "../data-access/sequelize/stageTableConnector";
+} from "../data-access/sequelize/project-connectors/stageTableConnector";
 import {isNullOrUndefined} from "util";
-import {ProjectDatabaseConnector} from "../data-access/sequelize/projectDatabaseConnector";
+import {ProjectDatabaseConnector} from "../data-access/sequelize/project-connectors/projectDatabaseConnector";
+
+interface IPosition {
+    x: number;
+    y: number;
+    z: number;
+}
+
+interface IJsonTile {
+    id: number;
+    relativePath: string;
+    position: IPosition;
+    step: IPosition;
+    isComplete: boolean;
+}
+
+interface IDashboardTileContents {
+    latticePosition: IPosition;
+    latticeStep: IPosition;
+}
+
+interface IDashboardJsonTile {
+    id: number;
+
+    relativePath: string;
+    contents: IDashboardTileContents;
+    isComplete: boolean;
+}
 
 export class ProjectPipelineScheduler extends BasePipelineScheduler {
 
@@ -33,16 +60,8 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
         this.IsProcessingRequested = true;
     }
 
-    protected getOutputPath(): string {
-        return this._project.root_path;
-    }
-
     protected getStageId(): string {
         return this._project.id;
-    }
-
-    protected getDepth(): number {
-        return 0;
     }
 
     protected async createOutputStageConnector(connector: ProjectDatabaseConnector): Promise<StageTableConnector> {
@@ -94,10 +113,15 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
 
         let t0 = performance.now();
 
+        /*
         const existingTilePaths = knownOutput.reduce((p, t) => {
             p[t.relative_path] = t;
             return p;
         }, {});
+        */
+        const existingTilePaths = new Map<string, IPipelineTile>();
+
+        knownOutput.map(t => existingTilePaths.set(t.relative_path, t));
 
         sorted.toUpdate = toUpdate.map<IPipelineTile>((inputTile: IPipelineTileAttributes) => {
             /*
@@ -111,7 +135,7 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
             const existingTile = knownOutput[existingTileIdx];
             */
 
-            const existingTile = existingTilePaths[inputTile.relative_path];
+            const existingTile = existingTilePaths.get(inputTile.relative_path);
 
             if (existingTile === null) {
                 debug(`unexpected missing tile ${inputTile.relative_path}`);
@@ -211,7 +235,7 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
             this._project = await PersistentStorageManager.Instance().Projects.findById(this._project.id);
         }
 
-        jsonContent.tiles.forEach(tile => {
+        jsonContent.tiles.forEach((tile: IJsonTile) => {
             // Normalize paths to posix
             let normalizedPath = tile.relativePath.replace(new RegExp("\\" + "\\", "g"), "/");
             let tileName = path.basename(normalizedPath);
@@ -254,7 +278,7 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
 
         for (let prop in jsonContent.tileMap) {
             if (jsonContent.tileMap.hasOwnProperty(prop)) {
-                jsonContent.tileMap[prop].forEach(tile => {
+                jsonContent.tileMap[prop].forEach((tile: IDashboardJsonTile) => {
                     // Normalize paths to posix
                     let normalizedPath = tile.relativePath.replace(new RegExp("\\" + "\\", "g"), "/");
                     let tileName = path.basename(normalizedPath);

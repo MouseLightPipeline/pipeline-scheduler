@@ -2,11 +2,11 @@ import ApolloClient, {createNetworkInterface} from "apollo-client";
 import gql from "graphql-tag";
 import "isomorphic-fetch";
 
-const debug = require("debug")("pipeline:coordinator-api:pipeline-worker-client");
+const debug = require("debug")("pipeline:scheduler:pipeline-worker-client");
 
-import {IPipelineWorker, PipelineWorkerStatus} from "../../data-model/sequelize/pipelineWorker";
-import {ITaskExecutionAttributes} from "../../data-model/taskExecution";
-import {PersistentStorageManager} from "../../data-access/sequelize/databaseConnector";
+import {IPipelineWorker, PipelineWorkerStatus} from "../data-model/sequelize/pipelineWorker";
+import {ITaskExecutionAttributes} from "../data-model/taskExecution";
+import {PersistentStorageManager} from "../data-access/sequelize/databaseConnector";
 
 export interface ITaskExecutionStatus {
     workerResponded: boolean;
@@ -15,13 +15,9 @@ export interface ITaskExecutionStatus {
 
 export interface IClientWorker {
     id: string;
-    work_capacity: number;
-    is_cluster_proxy: boolean;
-}
-
-export interface IClientUpdateWorkerOutput {
-    worker: IClientWorker;
-    error: string;
+    work_capacity?: number;
+    task_load?: number;
+    is_cluster_proxy?: boolean;
 }
 
 export class PipelineWorkerClient {
@@ -67,13 +63,7 @@ export class PipelineWorkerClient {
 
         return client;
     }
-
-    private static async markWorkerUnavailable(worker: IPipelineWorker): Promise<void> {
-        const row = await PersistentStorageManager.Instance().getPipelineWorker(worker.id);
-
-        row.status = PipelineWorkerStatus.Unavailable;
-    }
-
+/*
     public async queryTaskExecution(worker: IPipelineWorker, executionId: string): Promise<ITaskExecutionStatus> {
         const taskExecutionStatus = {
             workerResponded: false,
@@ -117,7 +107,7 @@ export class PipelineWorkerClient {
         }
 
         return taskExecutionStatus;
-    }
+    }*/
 
     public async startTaskExecution(worker: IPipelineWorker, taskInput: ITaskExecutionAttributes): Promise<ITaskExecutionAttributes> {
         const client = this.getClient(worker);
@@ -155,34 +145,41 @@ export class PipelineWorkerClient {
         return null;
     }
 
-    public async updateWorker(worker: IPipelineWorker): Promise<IClientUpdateWorkerOutput> {
+    public async queryWorker(worker: IPipelineWorker): Promise<IClientWorker> {
         const client = this.getClient(worker);
 
         if (client === null) {
-            return {worker: null, error: "Could not connect to worker"};
+            debug("Could not connect to worker");
+            return {id: worker.id, task_load: -1};
         }
 
         try {
-            let response = await client.mutate({
-                mutation: gql`
-                mutation UpdateWorkerMutation($worker: WorkerInput) {
-                    updateWorker(worker: $worker) {
+            let response: any = await client.query({
+                query: gql`
+                query {
+                    worker {
                         id
                         work_capacity
+                        task_load
                         is_cluster_proxy
+                        is_accepting_jobs
                     }
-                }`,
-                variables: {
-                    worker: Object.assign({}, {id: worker.id, work_capacity: worker.work_unit_capacity})
-                }
+                }`
             });
 
-            return {worker: response.data.updateWorker, error: null};
+            return response.data.worker;
         } catch (err) {
             await PipelineWorkerClient.markWorkerUnavailable(worker);
+            this._idClientMap.delete(worker.id);
             debug(`error submitting update to worker ${worker.name}`);
 
-            return {worker: null, error: err};
+            return {id: worker.id, task_load: -1};
         }
+    }
+
+    private static async markWorkerUnavailable(worker: IPipelineWorker): Promise<void> {
+        const row = await PersistentStorageManager.Instance().getPipelineWorker(worker.id);
+
+        row.status = PipelineWorkerStatus.Unavailable;
     }
 }

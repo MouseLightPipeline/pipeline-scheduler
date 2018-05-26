@@ -1,23 +1,28 @@
-import * as  path from "path";
 import {isNullOrUndefined} from "util";
 import * as _ from "lodash";
 
 const fse = require("fs-extra");
-const debug = require("debug")("pipeline:coordinator-api:base-pipeline-scheduler");
+const debug = require("debug")("pipeline:scheduler:base-pipeline-scheduler");
 
 import {updatePipelineStagePerformance} from "../data-model/sequelize/pipelineStagePerformance";
 import {ISchedulerInterface} from "./schedulerHub";
-import {PipelineWorkerClient} from "../graphql/client/pipelineWorkerClient";
 import {IProject} from "../data-model/sequelize/project";
-import {CompletionResult, ExecutionStatus, ITaskExecution} from "../data-model/taskExecution";
-import {connectorForProject, ProjectDatabaseConnector} from "../data-access/sequelize/projectDatabaseConnector";
 import {
-    IInProcessTileAttributes, IPipelineTile, IPipelineTileAttributes, IToProcessTileAttributes,
+    CompletionResult,
+    ExecutionStatus,
+    ITaskExecution,
+    IWorkerTaskExecutionAttributes
+} from "../data-model/taskExecution";
+import {
+    connectorForProject,
+    ProjectDatabaseConnector
+} from "../data-access/sequelize/project-connectors/projectDatabaseConnector";
+import {
+    IPipelineTile, IPipelineTileAttributes, IToProcessTileAttributes,
     StageTableConnector
-} from "../data-access/sequelize/stageTableConnector";
+} from "../data-access/sequelize/project-connectors/stageTableConnector";
 import {ITaskArgument, ITaskDefinition, TaskArgumentType} from "../data-model/sequelize/taskDefinition";
 import {IPipelineWorker} from "../data-model/sequelize/pipelineWorker";
-import {PersistentStorageManager} from "../data-access/sequelize/databaseConnector";
 
 export const DefaultPipelineIdKey = "relative_path";
 
@@ -42,7 +47,7 @@ export interface IMuxTileLists {
     toReset: IPipelineTile[],
     toDelete: string[]
 }
-
+/*
 class InProcessModifyList {
     private _toDelete: string[] = [];
     private _toUpdate: Map<TilePipelineStatus, string[]> = new Map<TilePipelineStatus, string[]>();
@@ -70,7 +75,7 @@ class InProcessModifyList {
         list.push(id);
     }
 }
-
+*/
 export abstract class BasePipelineScheduler implements ISchedulerInterface {
     protected _project: IProject;
 
@@ -106,19 +111,11 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         return this._isProcessingRequested;
     }
 
-    public get OutputPath(): string {
-        return this.getOutputPath();
-    }
-
-    protected abstract getOutputPath(): string;
-
     protected get StageId() {
         return this.getStageId();
     }
 
     protected abstract getStageId(): string;
-
-    protected abstract getDepth(): number;
 
     public async run() {
         if (this._isInitialized) {
@@ -126,33 +123,6 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         }
 
         this.transitionToInitialized();
-    }
-
-    public async loadTileThumbnailPath(x: number, y: number, z: number): Promise<string> {
-        try {
-            const tile = await this._outputStageConnector.loadTileThumbnailPath(x, y, z);
-
-            if (tile) {
-                return path.join(this.OutputPath, tile.relative_path);
-            }
-        } catch (err) {
-            debug(err);
-        }
-
-        return null;
-    }
-
-    public async loadTileStatusForPlane(zIndex: number) {
-
-        let tiles = await this._outputStageConnector.loadTileStatusForPlane(zIndex);
-
-        tiles = tiles.map(tile => {
-            tile["stage_id"] = this.StageId;
-            tile["depth"] = this.getDepth();
-            return tile;
-        });
-
-        return tiles;
     }
 
     protected async updateToProcessQueue(): Promise<boolean> {
@@ -240,6 +210,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         return toProcessInsert.length > 0;
     }
 
+    /*
     protected async updateInProcessStatus() {
         let inProcess = await this._outputStageConnector.loadInProcess();
 
@@ -250,7 +221,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
 
             await Promise.all(inProcess.map(tile => this.updateOneExecutingTile(tile, updateList)));
 
-            await this._outputStageConnector.updateTileStatus(updateList.ToUpdate);
+            await this._outputStageConnector.updateTileStatuses(updateList.ToUpdate);
 
             await this._outputStageConnector.deleteInProcess(updateList.ToDelete);
 
@@ -323,6 +294,58 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
 
                 updateList.remove(tile[DefaultPipelineIdKey])
             }
+        }
+    }*/
+
+    public async onTaskExecutionComplete(executionInfo: IWorkerTaskExecutionAttributes): Promise<void> {
+        const localTaskExecution = await this._outputStageConnector.loadTaskExecution(executionInfo.remote_id);
+
+        const update = Object.assign({}, {
+            job_id: executionInfo.job_id,
+            job_name: executionInfo.job_name,
+            execution_status_code: executionInfo.execution_status_code,
+            completion_status_code: executionInfo.completion_status_code,
+            last_process_status_code: executionInfo.last_process_status_code,
+            max_memory: executionInfo.max_memory,
+            max_cpu: executionInfo.max_cpu,
+            exit_code: executionInfo.exit_code,
+            submitted_at: executionInfo.submitted_at,
+            started_at: executionInfo.started_at,
+            completed_at: executionInfo.completed_at,
+            sync_status: executionInfo.sync_status,
+            synchronized_at: executionInfo.synchronized_at
+        });
+
+        await localTaskExecution.update(update);
+
+        if (executionInfo.execution_status_code === ExecutionStatus.Completed || executionInfo.execution_status_code === ExecutionStatus.Zombie) {
+            let tileStatus = TilePipelineStatus.Queued;
+
+            switch (executionInfo.completion_status_code) {
+                case CompletionResult.Success:
+                    tileStatus = TilePipelineStatus.Complete;
+                    break;
+                case CompletionResult.Error:
+                    tileStatus = TilePipelineStatus.Failed; // Do not queue again
+                    break;
+                case CompletionResult.Cancel:
+                    tileStatus = TilePipelineStatus.Canceled; // Could return to incomplete to be queued again
+                    break;
+            }
+
+            await this._outputStageConnector.updateTileStatus(executionInfo.tile_id, tileStatus);
+
+            // Tile should be marked with status and not be present in any intermediate tables.
+            //// updateList.update(tile[DefaultPipelineIdKey], tileStatus);
+            //// await this._outputStageConnector.updateTileStatuses(updateList.ToUpdate);
+
+            if (tileStatus === TilePipelineStatus.Complete) {
+                updatePipelineStagePerformance(this.StageId, executionInfo);
+
+                fse.appendFileSync(`${executionInfo.resolved_log_path}-done.txt`, `Complete ${(new Date()).toUTCString()}`);
+            }
+
+            await this._outputStageConnector.deleteInProcess([executionInfo.tile_id]);
         }
     }
 

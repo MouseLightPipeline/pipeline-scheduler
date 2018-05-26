@@ -1,15 +1,15 @@
 import {Instance, Model, Sequelize} from "sequelize";
 
-const debug = require("debug")("pipeline:coordinator-api:stage-database-connector");
+const debug = require("debug")("pipeline:scheduler:stage-database-connector");
 
-import {TilePipelineStatus} from "../../schedulers/basePipelineScheduler";
+import {TilePipelineStatus} from "../../../schedulers/basePipelineScheduler";
 import {
     augmentTaskExecutionModel,
     createTaskExecutionTable, IStartTaskInput, ITaskExecution,
     ITaskExecutionModel
-} from "../../data-model/taskExecution";
-import {IPipelineWorker} from "../../data-model/sequelize/pipelineWorker";
-import {ITaskDefinition} from "../../data-model/sequelize/taskDefinition";
+} from "../../../data-model/taskExecution";
+import {IPipelineWorker} from "../../../data-model/sequelize/pipelineWorker";
+import {ITaskDefinition} from "../../../data-model/sequelize/taskDefinition";
 
 export function generatePipelineCustomTableName(pipelineStageId: string, tableName) {
     return pipelineStageId + "_" + tableName;
@@ -201,7 +201,12 @@ export class StageTableConnector {
         }
     }
 
-    public async updateTileStatus(toUpdate: Map<TilePipelineStatus, string[]>) {
+    public async updateTileStatus(relative_path: string, status: TilePipelineStatus) {
+        const tile = await this.loadTile({relative_path: relative_path});
+        await tile.update({this_stage_status: status});
+    }
+
+    public async updateTileStatuses(toUpdate: Map<TilePipelineStatus, string[]>) {
         if (!toUpdate) {
             return;
         }

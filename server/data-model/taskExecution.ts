@@ -69,6 +69,10 @@ export interface ITaskExecutionAttributes {
     deleted_at?: Date;
 }
 
+export interface IWorkerTaskExecutionAttributes extends ITaskExecutionAttributes {
+    remote_id: string;
+}
+
 export interface ITaskExecution extends Instance<ITaskExecutionAttributes>, ITaskExecutionAttributes {
 }
 

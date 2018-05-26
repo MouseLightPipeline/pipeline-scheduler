@@ -1,12 +1,12 @@
 import * as _ from "lodash";
 const {performance} = require("perf_hooks");
 
-const debug = require("debug")("pipeline:coordinator-api:map-scheduler");
+const debug = require("debug")("pipeline:scheduler:map-scheduler");
 
 import {IPipelineStage} from "../data-model/sequelize/pipelineStage";
 
 import {PipelineScheduler} from "./stagePipelineScheduler";
-import {IPipelineTile} from "../data-access/sequelize/stageTableConnector";
+import {IPipelineTile} from "../data-access/sequelize/project-connectors/stageTableConnector";
 import {DefaultPipelineIdKey, IMuxTileLists, TilePipelineStatus} from "./basePipelineScheduler";
 import {IProject} from "../data-model/sequelize/project";
 
