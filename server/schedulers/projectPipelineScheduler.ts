@@ -44,7 +44,6 @@ interface IDashboardTileContents {
 
 interface IDashboardJsonTile {
     id: number;
-
     relativePath: string;
     contents: IDashboardTileContents;
     isComplete: boolean;
@@ -113,28 +112,11 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
 
         let t0 = performance.now();
 
-        /*
-        const existingTilePaths = knownOutput.reduce((p, t) => {
-            p[t.relative_path] = t;
-            return p;
-        }, {});
-        */
         const existingTilePaths = new Map<string, IPipelineTile>();
 
         knownOutput.map(t => existingTilePaths.set(t.relative_path, t));
 
         sorted.toUpdate = toUpdate.map<IPipelineTile>((inputTile: IPipelineTileAttributes) => {
-            /*
-            const existingTileIdx = _.findIndex(knownOutput, t => t.relative_path === inputTile.relative_path);
-
-            if (existingTileIdx < 0) {
-                debug(`unexpected missing tile ${inputTile.relative_path}`);
-                return null;
-            }
-
-            const existingTile = knownOutput[existingTileIdx];
-            */
-
             const existingTile = existingTilePaths.get(inputTile.relative_path);
 
             if (existingTile === null) {

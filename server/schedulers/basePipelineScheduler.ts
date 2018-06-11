@@ -47,35 +47,7 @@ export interface IMuxTileLists {
     toReset: IPipelineTile[],
     toDelete: string[]
 }
-/*
-class InProcessModifyList {
-    private _toDelete: string[] = [];
-    private _toUpdate: Map<TilePipelineStatus, string[]> = new Map<TilePipelineStatus, string[]>();
 
-    public get ToDelete(): string[] {
-        return this._toDelete;
-    }
-
-    public get ToUpdate(): Map<TilePipelineStatus, string[]> {
-        return this._toUpdate;
-    }
-
-    public remove(id: string) {
-        this._toDelete.push(id);
-    }
-
-    public update(id: string, status: TilePipelineStatus) {
-        let list = this._toUpdate.get(status);
-
-        if (!list) {
-            list = [];
-            this._toUpdate.set(status, list);
-        }
-
-        list.push(id);
-    }
-}
-*/
 export abstract class BasePipelineScheduler implements ISchedulerInterface {
     protected _project: IProject;
 
@@ -210,93 +182,6 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         return toProcessInsert.length > 0;
     }
 
-    /*
-    protected async updateInProcessStatus() {
-        let inProcess = await this._outputStageConnector.loadInProcess();
-
-        if (inProcess.length > 0) {
-            debug(`updating status of ${inProcess.length} in process tiles`);
-
-            const updateList = new InProcessModifyList();
-
-            await Promise.all(inProcess.map(tile => this.updateOneExecutingTile(tile, updateList)));
-
-            await this._outputStageConnector.updateTileStatuses(updateList.ToUpdate);
-
-            await this._outputStageConnector.deleteInProcess(updateList.ToDelete);
-
-            debug(`updated status of ${inProcess.length} in process tiles`);
-        } else {
-            debug(`no in process tiles to update`);
-        }
-    }
-
-    private async updateOneExecutingTile(tile: IInProcessTileAttributes, updateList: InProcessModifyList): Promise<void> {
-        let workerForTask = await PersistentStorageManager.Instance().getPipelineWorker(tile.worker_id);
-
-        const executionStatus = await PipelineWorkerClient.Instance().queryTaskExecution(workerForTask, tile.worker_task_execution_id);
-
-        if (executionStatus.workerResponded) {
-            const executionInfo = executionStatus.taskExecution;
-
-            if (executionInfo != null) {
-                const localTaskExecution = await this._outputStageConnector.loadTaskExecution(tile.task_execution_id);
-
-                const update = Object.assign({}, {
-                    job_id: executionInfo.job_id,
-                    job_name: executionInfo.job_name,
-                    execution_status_code: executionInfo.execution_status_code,
-                    completion_status_code: executionInfo.completion_status_code,
-                    last_process_status_code: executionInfo.last_process_status_code,
-                    max_memory: executionInfo.max_memory,
-                    max_cpu: executionInfo.max_cpu,
-                    exit_code: executionInfo.exit_code,
-                    submitted_at: executionInfo.submitted_at,
-                    started_at: executionInfo.started_at,
-                    completed_at: executionInfo.completed_at,
-                    sync_status: executionInfo.sync_status,
-                    synchronized_at: executionInfo.synchronized_at
-                });
-
-                await localTaskExecution.update(update);
-
-                if (executionInfo.execution_status_code === ExecutionStatus.Completed || executionInfo.execution_status_code === ExecutionStatus.Zombie) {
-                    let tileStatus = TilePipelineStatus.Queued;
-
-                    switch (executionInfo.completion_status_code) {
-                        case CompletionResult.Success:
-                            tileStatus = TilePipelineStatus.Complete;
-                            break;
-                        case CompletionResult.Error:
-                            tileStatus = TilePipelineStatus.Failed; // Do not queue again
-                            break;
-                        case CompletionResult.Cancel:
-                            tileStatus = TilePipelineStatus.Canceled; // Could return to incomplete to be queued again
-                            break;
-                    }
-
-                    // Tile should be marked with status and not be present in any intermediate tables.
-                    updateList.update(tile[DefaultPipelineIdKey], tileStatus);
-
-                    if (tileStatus === TilePipelineStatus.Complete) {
-                        updatePipelineStagePerformance(this.StageId, executionInfo);
-
-                        fse.appendFileSync(`${executionInfo.resolved_log_path}-done.txt`, `Complete ${(new Date()).toUTCString()}`);
-                    }
-
-                    // await this.inProcessTable.where(DefaultPipelineIdKey, tile[DefaultPipelineIdKey]).del();
-                    updateList.remove(tile[DefaultPipelineIdKey])
-                }
-            } else {
-                // If the worker responded and has no knowledge of this task id, it may have cleared on the worker side
-                // prematurely via the worker UI.  Mark as canceled since the status is unknown.
-                updateList.update(tile[DefaultPipelineIdKey], TilePipelineStatus.Canceled);
-
-                updateList.remove(tile[DefaultPipelineIdKey])
-            }
-        }
-    }*/
-
     public async onTaskExecutionComplete(executionInfo: IWorkerTaskExecutionAttributes): Promise<void> {
         const localTaskExecution = await this._outputStageConnector.loadTaskExecution(executionInfo.remote_id);
 
@@ -350,7 +235,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
     }
 
     /***
-     * This is the opportunity to prepare any scheduler-specific information that are mapped from parameter arguments.
+     * This is the opportunity to prepare any scheduler-specific information that is mapped from parameter arguments.
      * In particular, anything that requires an async/await call.
      *
      * @param {IPipelineTileAttributes} tile

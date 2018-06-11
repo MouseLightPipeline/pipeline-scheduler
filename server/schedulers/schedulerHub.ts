@@ -118,7 +118,7 @@ export class SchedulerHub {
     private async pauseStagesForProject(pipelineStagesManager: any, project: IProjectAttributes) {
         const stages: IPipelineStage[] = await pipelineStagesManager.getForProject(project.id);
 
-        await this.removeWorker(project/*, this._tileStatusWorkers*/);
+        await this.removeWorker(project);
 
         await Promise.all(stages.map(stage => this.pauseStage(stage)));
     }
@@ -126,7 +126,7 @@ export class SchedulerHub {
     private async pauseStage(stage: any): Promise<boolean> {
         stage.update({is_processing: false});
 
-        return this.removeWorker(stage/*, this._pipelineStageWorkers*/);
+        return this.removeWorker(stage);
     }
 
     private async manageStageProcessingFlag() {
