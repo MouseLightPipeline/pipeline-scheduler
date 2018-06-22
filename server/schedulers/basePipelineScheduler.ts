@@ -23,6 +23,7 @@ import {
 } from "../data-access/sequelize/project-connectors/stageTableConnector";
 import {ITaskArgument, ITaskDefinition, TaskArgumentType} from "../data-model/sequelize/taskDefinition";
 import {IPipelineWorker} from "../data-model/sequelize/pipelineWorker";
+import {IPipelineStage} from "../data-model/sequelize/pipelineStage";
 
 export const DefaultPipelineIdKey = "relative_path";
 
@@ -50,6 +51,7 @@ export interface IMuxTileLists {
 
 export abstract class BasePipelineScheduler implements ISchedulerInterface {
     protected _project: IProject;
+    protected _source: IProject | IPipelineStage;
 
     protected _outputStageConnector: StageTableConnector;
 
@@ -58,8 +60,9 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
 
     private _isInitialized: boolean = false;
 
-    protected constructor(project: IProject) {
+    protected constructor(project: IProject, source: IProject | IPipelineStage) {
         this._project = project;
+        this._source = source;
 
         this.IsExitRequested = false;
 
@@ -84,10 +87,8 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
     }
 
     protected get StageId() {
-        return this.getStageId();
+        return this._source.id;
     }
-
-    protected abstract getStageId(): string;
 
     public async run() {
         if (this._isInitialized) {
@@ -104,18 +105,18 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         // table and remark them incomplete (1) and reprocess them just to be safe
         //
 
-        debug("looking for new to-process");
-
         let toProcessInsert: IToProcessTileAttributes[] = [];
 
         const unscheduled = await this._outputStageConnector.loadUnscheduled();
 
-        debug(`found ${unscheduled.length} unscheduled`);
+        debug(`${this._source.name}: found ${unscheduled.length} unscheduled`);
 
         if (unscheduled.length > 0) {
             let waitingToProcess = await this._outputStageConnector.loadToProcess();
 
-            debug(`found ${waitingToProcess.length} waitingToProcess`);
+            const initialLength = waitingToProcess.length;
+
+            debug(`${this._source.name}: found ${initialLength} waitingToProcess`);
 
             // Only items that are ready to queue, but aren't actually in the toProcess table yet.  There appear to be
             // some resubmit situations where these are out of sync temporarily.
@@ -149,7 +150,9 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
                 return !(!isNullOrUndefined(this._project.region_z_max) && tile.lat_z > this._project.region_z_max);
             });
 
-            debug(`have ${toSchedule.length} unscheduled after region filtering`);
+            if (initialLength !== toSchedule.length) {
+                debug(`${this._source.name}: have ${toSchedule.length} unscheduled after region filtering`);
+            }
 
             toSchedule = toSchedule.map(obj => {
                 obj.this_stage_status = TilePipelineStatus.Queued;
@@ -183,7 +186,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
     }
 
     public async onTaskExecutionComplete(executionInfo: IWorkerTaskExecutionAttributes): Promise<void> {
-        const localTaskExecution = await this._outputStageConnector.loadTaskExecution(executionInfo.remote_id);
+        const localTaskExecution = await this._outputStageConnector.loadTaskExecution(executionInfo.remote_task_execution_id);
 
         const update = Object.assign({}, {
             job_id: executionInfo.job_id,
@@ -226,8 +229,6 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
 
             if (tileStatus === TilePipelineStatus.Complete) {
                 updatePipelineStagePerformance(this.StageId, executionInfo);
-
-                fse.appendFileSync(`${executionInfo.resolved_log_path}-done.txt`, `Complete ${(new Date()).toUTCString()}`);
             }
 
             await this._outputStageConnector.deleteInProcess([executionInfo.tile_id]);
@@ -270,7 +271,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
             case "EXPECTED_EXIT_CODE":
                 return isNullOrUndefined(task.expected_exit_code) ? value : task.expected_exit_code.toString();
             case "IS_CLUSTER_JOB":
-                return worker.is_cluster_proxy ? "1" : "0";
+                return worker.cluster_work_capacity > 0 ? "1" : "0";
             case "TASK_ID":
                 return taskExecution.id;
         }
@@ -309,45 +310,28 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
 
     protected async refreshWithKnownInput(knownInput: any[]) {
         if (knownInput.length > 0) {
-            debug(`updating known input tiles`);
-
             let knownOutput = await this._outputStageConnector.loadTiles({attributes: [DefaultPipelineIdKey, "prev_stage_status", "this_stage_status"]});
 
-            debug(`muxing tiles`);
             let sorted = await this.muxInputOutputTiles(knownInput, knownOutput);
 
-            debug(`${sorted.toInsert.length} to insert`);
             await this._outputStageConnector.insertTiles(sorted.toInsert);
 
-            debug(`${sorted.toUpdate.length} to update`);
             await this._outputStageConnector.updateTiles(sorted.toUpdate);
 
-            debug(`${sorted.toDelete.length} to delete`);
             await this._outputStageConnector.deleteTiles(sorted.toDelete);
 
-            debug(`${sorted.toDelete.length} to delete in to process`);
             // Also remove any queued to process.
             await this._outputStageConnector.deleteToProcess(sorted.toDelete);
 
             // Remove any queued whose previous stage have been reverted.
-
-            debug(`${sorted.toReset.length} to reset`);
             if (sorted.toReset.length > 0) {
                 debug(`${sorted.toReset.length} tiles have reverted their status and should be removed from to-process`);
                 await this._outputStageConnector.deleteToProcess(sorted.toReset.map(t => t.relative_path));
             }
 
-            debug(`update complete`);
-            /*
-             const previousStageRegression = sorted.toUpdate.filter(t => t.prev_stage_status !== TilePipelineStatus.Complete && t.this_stage_status === TilePipelineStatus.Queued).map(t => t[DefaultPipelineIdKey]);
-
-             if (previousStageRegression.length > 0) {
-                 debug(`${previousStageRegression.length} tiles have reverted their status and should be removed from to-process`);
-                 await this._outputStageConnector.deleteToProcess(previousStageRegression);
-             }
-             */
+            debug(`${this._source.name}: ${sorted.toInsert.length} insert, ${sorted.toUpdate.length} update, ${sorted.toDelete.length} delete, ${sorted.toReset.length} reset`);
         } else {
-            debug("no input from previous stage");
+            debug(`${this._source.name}: no input from previous stage`);
         }
     }
 
@@ -360,7 +344,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
 
     protected async performWork() {
         if (this.IsExitRequested) {
-            debug("cancel requested - exiting stage worker");
+            debug(`{this._source.name}: cancel requested - exiting stage worker`);
             return;
         }
 

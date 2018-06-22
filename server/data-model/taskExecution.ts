@@ -7,6 +7,7 @@ import {ITaskDefinition} from "./sequelize/taskDefinition";
 export interface IStartTaskInput {
     pipelineStageId: string;
     tileId: string;
+    outputPath: string;
     logFile: string;
 }
 
@@ -38,17 +39,19 @@ export enum SyncStatus {
 
 export interface ITaskExecutionAttributes {
     id?: string;
+    worker_id?: string;
+    worker_task_execution_id?: string;
     task_definition_id?: string;
     pipeline_stage_id?: string;
     tile_id?: string;
+    resolved_output_path?: string;
     resolved_script?: string;
     resolved_interpreter?: string;
     resolved_script_args?: string;
     resolved_cluster_args?: string;
     resolved_log_path?: string;
     expected_exit_code?: number;
-    worker_id?: string;
-    work_units?: number;
+    local_work_units?: number;
     cluster_work_units?: number;
     queue_type?: number;
     job_id?: number;
@@ -70,7 +73,7 @@ export interface ITaskExecutionAttributes {
 }
 
 export interface IWorkerTaskExecutionAttributes extends ITaskExecutionAttributes {
-    remote_id: string;
+    remote_task_execution_id: string;
 }
 
 export interface ITaskExecution extends Instance<ITaskExecutionAttributes>, ITaskExecutionAttributes {
@@ -90,6 +93,12 @@ export function createTaskExecutionTable(sequelize: Sequelize, tableName: string
             type: DataTypes.UUID,
             defaultValue: DataTypes.UUIDV4
         },
+        worker_id: {
+            type: DataTypes.UUID
+        },
+        worker_task_execution_id: {
+            type: DataTypes.UUID
+        },
         task_definition_id: {
             type: DataTypes.UUID
         },
@@ -98,6 +107,10 @@ export function createTaskExecutionTable(sequelize: Sequelize, tableName: string
         },
         tile_id: {
             type: DataTypes.TEXT
+        },
+        resolved_output_path: {
+            type: DataTypes.TEXT,
+            defaultValue: ""
         },
         resolved_script: {
             type: DataTypes.TEXT,
@@ -119,10 +132,7 @@ export function createTaskExecutionTable(sequelize: Sequelize, tableName: string
         expected_exit_code: {
             type: DataTypes.INTEGER
         },
-        worker_id: {
-            type: DataTypes.UUID
-        },
-        work_units: {
+        local_work_units: {
             type: DataTypes.INTEGER
         },
         cluster_work_units: {
@@ -180,13 +190,6 @@ export function createTaskExecutionTable(sequelize: Sequelize, tableName: string
             fields: ["worker_id"]
         }]
     });
-
-    /*
-    TaskExecutionModel.associate = models => {
-        TaskExecutionModel.belongsTo(models.TaskDefinitions, {foreignKey: "task_definition_id"});
-        TaskExecutionModel.belongsTo(models.PipelineStages, {foreignKey: "pipeline_stage_id"});
-    };
-    */
 }
 
 export function augmentTaskExecutionModel(Model: ITaskExecutionModel) {
@@ -212,15 +215,17 @@ export function augmentTaskExecutionModel(Model: ITaskExecutionModel) {
 }
 
 async function createTaskExecutionWithInput(worker: IPipelineWorker, taskDefinition: ITaskDefinition, startTaskInput: IStartTaskInput): Promise<ITaskExecutionAttributes> {
-    const queueType: QueueType = worker.is_cluster_proxy ? QueueType.Cluster : QueueType.Local;
+    const queueType: QueueType = worker.cluster_work_capacity > 0 ? QueueType.Cluster : QueueType.Local;
 
     return {
+        worker_id: worker.id,
+        worker_task_execution_id: null,
         task_definition_id: taskDefinition.id,
         pipeline_stage_id: startTaskInput.pipelineStageId,
         tile_id: startTaskInput.tileId,
-        worker_id: worker.id,
-        work_units: queueType === QueueType.Local ? taskDefinition.work_units : null,
-        cluster_work_units: queueType === QueueType.Cluster ? taskDefinition.cluster_work_units : null,
+        local_work_units: taskDefinition.local_work_units,
+        cluster_work_units: taskDefinition.cluster_work_units,
+        resolved_output_path: startTaskInput.outputPath,
         resolved_script: await taskDefinition.getFullScriptPath(false),
         resolved_interpreter: taskDefinition.interpreter,
         resolved_script_args: null, // Will be filled later b/c may include execution id created after this is saved. JSON.stringify(startTaskInput.scriptArgs),

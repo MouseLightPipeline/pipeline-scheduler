@@ -15,9 +15,10 @@ export interface ITaskExecutionStatus {
 
 export interface IClientWorker {
     id: string;
-    work_capacity?: number;
-    task_load?: number;
-    is_cluster_proxy?: boolean;
+    local_work_capacity?: number;
+    cluster_work_capacity?: number;
+    local_task_load?: number;
+    cluster_task_load?: number;
 }
 
 export class PipelineWorkerClient {
@@ -63,51 +64,6 @@ export class PipelineWorkerClient {
 
         return client;
     }
-/*
-    public async queryTaskExecution(worker: IPipelineWorker, executionId: string): Promise<ITaskExecutionStatus> {
-        const taskExecutionStatus = {
-            workerResponded: false,
-            taskExecution: null
-        };
-
-        const client = this.getClient(worker);
-
-        if (client === null) {
-            return taskExecutionStatus;
-        }
-
-        try {
-            let response: any = await client.query({
-                query: gql`
-                query($id: String!) {
-                    taskExecution(id: $id) {
-                        id
-                        last_process_status_code
-                        completion_status_code
-                        execution_status_code
-                        max_cpu
-                        max_memory
-                        work_units
-                        resolved_log_path
-                        started_at
-                        completed_at
-                    }
-                }`,
-                variables: {
-                    id: executionId
-                },
-                fetchPolicy: "network-only"
-            });
-
-            taskExecutionStatus.taskExecution = response.data.taskExecution;
-            taskExecutionStatus.workerResponded = true;
-        } catch (err) {
-            await PipelineWorkerClient.markWorkerUnavailable(worker);
-            debug(`error querying task status for worker ${worker.name}`);
-        }
-
-        return taskExecutionStatus;
-    }*/
 
     public async startTaskExecution(worker: IPipelineWorker, taskInput: ITaskExecutionAttributes): Promise<ITaskExecutionAttributes> {
         const client = this.getClient(worker);
@@ -125,7 +81,7 @@ export class PipelineWorkerClient {
                         completion_status_code
                         execution_status_code
                         last_process_status_code
-                        work_units
+                        local_work_units
                         submitted_at
                         started_at
                         completed_at
@@ -150,19 +106,19 @@ export class PipelineWorkerClient {
 
         if (client === null) {
             debug("Could not connect to worker");
-            return {id: worker.id, task_load: -1};
+            return {id: worker.id, local_task_load: -1, cluster_task_load: -1};
         }
 
         try {
-            let response: any = await client.query({
+            const response: any = await client.query({
                 query: gql`
                 query {
                     worker {
                         id
-                        work_capacity
-                        task_load
-                        is_cluster_proxy
-                        is_accepting_jobs
+                        local_work_capacity
+                        cluster_work_capacity
+                        local_task_load
+                        cluster_task_load
                     }
                 }`
             });
@@ -171,9 +127,9 @@ export class PipelineWorkerClient {
         } catch (err) {
             await PipelineWorkerClient.markWorkerUnavailable(worker);
             this._idClientMap.delete(worker.id);
-            debug(`error submitting update to worker ${worker.name}`);
+            debug(`error requesting worker update ${worker.name}`);
 
-            return {id: worker.id, task_load: -1};
+            return {id: worker.id, local_task_load: -1, cluster_task_load: -1};
         }
     }
 

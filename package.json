@@ -1,11 +1,12 @@
 {
   "name": "pipeline-scheduler",
-  "version": "1.0.0",
+  "version": "1.2.1",
   "description": "",
   "author": "Patrick Edson <pedson@leapscientific.com> (http://github.com/pedson)",
   "main": "server/pipelineSchedulerApp.js",
   "license": "LicenseRef-LICENSE",
-  "yarn add dockerRepository": "mouselightpipeline",
+  "dockerRepository": "mouselightpipeline",
+  "dockerImageName": "scheduler",
   "scripts": {
     "devel": "DEBUG=pipeline* node $NODE_DEBUG_OPTION --trace-warnings server/pipelineSchedulerApp.js",
     "start": "node server/pipelineSchedulerApp.js",
@@ -69,6 +70,6 @@
     "gulp-shell": "^0.6.3",
     "jest": "^22.4.2",
     "ts-jest": "^22.4.1",
-    "typescript": "^2.8.3"
+    "typescript": "^2.9.2"
   }
 }

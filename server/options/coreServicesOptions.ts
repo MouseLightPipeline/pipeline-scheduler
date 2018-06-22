@@ -6,21 +6,23 @@ const coreServicesOptions = {
         database: "pipeline_production",
         username: "postgres",
         password: "pgsecret",
-        logging: null as string,
+        logging: null,
         pool: {
-            max: 30,
-            min: 5,
+            max: 15,
+            min: 0,
             acquire: 20000,
-            idle: 20000
+            idle: 10000
         }
     },
     metricsDatabase: {
-            host: "pipeline-metrics",
-            port: 8086,
-            taskDatabase: "task_metrics_db"
+        host: "pipeline-metrics",
+        port: 8086,
+        taskDatabase: "task_metrics_db"
     },
     messageQueue: {
-
+        host: "pipeline-message-queue",
+        port: 5672,
+        uiPort: 15672,
     }
 };
 
@@ -42,12 +44,21 @@ function loadDatabaseOptions(options: any): any {
     return options;
 }
 
+function loadMessageQueueOptions(options: any) {
+    options.host = process.env.PIPELINE_CORE_SERVICES_HOST || options.host;
+    options.port = parseInt(process.env.PIPELINE_MESSAGE_PORT) || options.port;
+    options.uiPort = parseInt(process.env.PIPELINE_MESSAGE_UI_PORT) || options.uiPort;
+
+    return options;
+}
+
 function loadOptions() {
     const options = Object.assign({}, coreServicesOptions);
 
     // When outside a pure container environment.
     options.database = loadDatabaseOptions(options.database);
     options.metricsDatabase = loadMetricsDatabaseOptions(options.metricsDatabase);
+    options.messageQueue = loadMessageQueueOptions(options.messageQueue);
 
     return options;
 }
@@ -57,3 +68,5 @@ export const CoreServicesOptions = loadOptions();
 export const SequelizeOptions = CoreServicesOptions.database;
 
 export const MetricsOptions = CoreServicesOptions.metricsDatabase;
+
+export const MessageQueueOptions = CoreServicesOptions.messageQueue;

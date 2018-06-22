@@ -1,4 +1,5 @@
 import {PersistentStorageManager} from "../data-access/sequelize/databaseConnector";
+
 const {performance} = require("perf_hooks");
 
 const fse = require("fs-extra");
@@ -22,6 +23,7 @@ import {
 } from "../data-access/sequelize/project-connectors/stageTableConnector";
 import {isNullOrUndefined} from "util";
 import {ProjectDatabaseConnector} from "../data-access/sequelize/project-connectors/projectDatabaseConnector";
+import {ServiceOptions} from "../options/serverOptions";
 
 interface IPosition {
     x: number;
@@ -52,15 +54,11 @@ interface IDashboardJsonTile {
 export class ProjectPipelineScheduler extends BasePipelineScheduler {
 
     public constructor(project: IProject) {
-        super(project);
+        super(project, project);
 
         this.IsExitRequested = false;
 
         this.IsProcessingRequested = true;
-    }
-
-    protected getStageId(): string {
-        return this._project.id;
     }
 
     protected async createOutputStageConnector(connector: ProjectDatabaseConnector): Promise<StageTableConnector> {
@@ -143,18 +141,26 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
             }
         }).filter(t => t !== null);
 
-        debug(`${(performance.now() - t0).toFixed(3)} ms to map update ${this._project.id}`);
+        debug(`${this._project.name}: mux ${(performance.now() - t0).toFixed(3)} ms`);
 
         return sorted;
     }
 
     private async performJsonUpdate(): Promise<IPipelineTileAttributes[]> {
-        let dataFile = path.join(this._project.root_path, pipelineInputJsonFile);
+        let root = this._project.root_path;
+
+        ServiceOptions.driveMapping.map(d => {
+            if (root.startsWith(d.remote)) {
+                root = d.local + root.slice(d.remote.length);
+            }
+        });
+
+        let dataFile = path.join(root, pipelineInputJsonFile);
 
         if (!fse.existsSync(dataFile)) {
             debug(`${pipelineInputJsonFile} does not exist in the project root path - moving on to ${dashboardJsonFile}`);
 
-            dataFile = path.join(this._project.root_path, dashboardJsonFile);
+            dataFile = path.join(root, dashboardJsonFile);
 
             if (!fse.existsSync(dataFile)) {
                 debug(`${dashboardJsonFile} also does not exist in the project root path ${dataFile} - skipping tile update`);
@@ -170,9 +176,9 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
 
         [projectUpdate, tiles] = await this.parsePipelineInput(dataFile, projectUpdate);
 
-        let outputFile = path.join(this._project.root_path, tileStatusJsonFile);
+        let outputFile = path.join(root, tileStatusJsonFile);
 
-        let backupFile = path.join(this._project.root_path, tileStatusLastJsonFile);
+        let backupFile = path.join(root, tileStatusLastJsonFile);
 
         if (fse.existsSync(outputFile)) {
             fse.copySync(outputFile, backupFile, {clobber: true});

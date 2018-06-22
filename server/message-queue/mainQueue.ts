@@ -1,5 +1,6 @@
 import * as amqp from "amqplib";
-import {ServiceOptions} from "../options/serverOptions";
+
+import {MessageQueueOptions} from "../options/coreServicesOptions";
 import {Connection, Channel} from "amqplib";
 import {IWorkerTaskExecutionAttributes} from "../data-model/taskExecution";
 import {SchedulerHub} from "../schedulers/schedulerHub";
@@ -19,7 +20,7 @@ export class MainQueue {
     }
 
     public async Connect(): Promise<void> {
-        const url = `amqp://${ServiceOptions.messageService.host}:${ServiceOptions.messageService.port}`;
+        const url = `amqp://${MessageQueueOptions.host}:${MessageQueueOptions.port}`;
 
         debug(`main queue url: ${url}`);
 

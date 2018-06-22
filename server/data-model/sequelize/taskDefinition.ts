@@ -24,7 +24,7 @@ export interface ITaskDefinitionAttributes {
     // script_args: string;
     cluster_args: string;
     expected_exit_code: number;
-    work_units: number;
+    local_work_units: number;
     cluster_work_units: number;
     log_prefix: string;
     task_repository_id: string;
@@ -81,7 +81,7 @@ export function sequelizeImport(sequelize, DataTypes) {
             type: DataTypes.INTEGER,
             defaultValue: 0
         },
-        work_units: {
+        local_work_units: {
             type: DataTypes.DOUBLE,
             defaultValue: 0
         },

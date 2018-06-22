@@ -33,15 +33,12 @@ interface IProjectQueueToken {
 }
 
 export class ProjectDatabaseConnector {
-    private _isConnected: boolean;
+    private _isConnected: boolean = false;
     private _connection: Sequelize;
     private _project: IProjectAttributes;
     private _databaseName: string;
 
     private _stageConnectors = new Map<string, StageTableConnector>();
-    private _stageConnectorQueueAccess = asyncUtils.queue(accessStageQueue, 1);
-    private _projectConnectorQueueAccess = asyncUtils.queue(accessProjectQueue, 1);
-
     public async initialize(project: IProjectAttributes) {
         this._project = project;
         this._databaseName = this._project.id;
@@ -70,7 +67,7 @@ export class ProjectDatabaseConnector {
 
         // Serialize access to queue for a non-existent connector so only one is created.
         return new Promise<StageTableConnector>((resolve, reject) => {
-            this._stageConnectorQueueAccess.push({
+            _stageConnectorQueueAccess.push({
                 projectConnector: this,
                 stage,
                 resolve,
@@ -101,7 +98,7 @@ export class ProjectDatabaseConnector {
 
         // Serialize access to queue for a non-existent connector so only one is created.
         return new Promise<StageTableConnector>((resolve, reject) => {
-            this._projectConnectorQueueAccess.push({
+            _projectConnectorQueueAccess.push({
                 projectConnector: this,
                 project,
                 resolve,
@@ -140,14 +137,8 @@ export class ProjectDatabaseConnector {
 const connectionMap = new Map<string, ProjectDatabaseConnector>();
 
 const connectorQueueAccess = asyncUtils.queue(accessQueueWorker, 1);
-
-export async function connectorForStage(pipelineStage: IPipelineStage): Promise<StageTableConnector> {
-    const project = await PersistentStorageManager.Instance().Projects.findById(pipelineStage.project_id);
-
-    const connector = await connectorForProject(project);
-
-    return connector.connectorForStage(pipelineStage);
-}
+const _projectConnectorQueueAccess = asyncUtils.queue(accessProjectQueue, 1);
+const _stageConnectorQueueAccess = asyncUtils.queue(accessStageQueue, 1);
 
 export async function connectorForProject(project: IProjectAttributes): Promise<ProjectDatabaseConnector> {
     if (connectionMap.has(project.id)) {
@@ -176,14 +167,14 @@ async function accessQueueWorker(token: IAccessQueueToken, completeCallback) {
 
             await connector.initialize(token.project);
 
-            debug(`successful database connection: ${token.project.id}`);
+            debug(`successful connector: ${token.project.id}`);
 
             connectionMap.set(token.project.id, connector);
         }
 
         token.resolve(connectionMap.get(token.project.id));
     } catch (err) {
-        debug(`failed database connection: ${token.project.id}`);
+        debug(`failed connector connection: ${token.project.id}`);
         debug(err);
         token.reject(err);
     }
@@ -197,9 +188,10 @@ async function accessStageQueue(token: IStageQueueToken, completeCallback) {
 
         token.resolve(connector);
     } catch (err) {
-        debug(`failed database connection: ${token.stage.id}`);
-        debug(err);
-        token.reject(err);
+        debug(`failed stage database connection: ${token.stage.id}, retying`);
+        // debug(err);
+        // token.reject(err);
+        _stageConnectorQueueAccess.push(token);
     }
 
     completeCallback();
@@ -211,9 +203,10 @@ async function accessProjectQueue(token: IProjectQueueToken, completeCallback) {
 
         token.resolve(connector);
     } catch (err) {
-        debug(`failed database connection: ${token.project.id}`);
-        debug(err);
-        token.reject(err);
+        debug(`failed project database connection: ${token.project.id}, retying`);
+        // debug(err);
+        // token.reject(err);
+        _projectConnectorQueueAccess.push(token);
     }
 
     completeCallback();

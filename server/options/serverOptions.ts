@@ -1,29 +1,25 @@
-interface IServiceOptions {
+export interface IDriveMapping {
+    local: string;
+    remote: string;
+}
+
+export interface IServiceOptions {
     port: number;
-    messageService: {
-        host: string;
-        port: number;
-    }
+    driveMapping: IDriveMapping[];
 }
 
 const configurations: IServiceOptions = {
     port: 6002,
-    messageService: {
-        host: "pipeline-message-queue",
-        port: 5672
-    }
+    driveMapping: JSON.parse("[]")
 };
 
 function loadConfiguration(): IServiceOptions {
     const options = configurations;
 
     options.port = parseInt(process.env.PIPELINE_SCHEDULER_PORT) || options.port;
-
-    options.messageService.host = process.env.PIPELINE_CORE_SERVICES_HOST || options.messageService.host;
-    options.messageService.port = parseInt(process.env.PIPELINE_MESSAGE_PORT) || options.messageService.port;
+    options.driveMapping = JSON.parse(process.env.PIPELINE_DRIVE_MAPPING || null) || options.driveMapping;
 
     return options;
 }
 
 export const ServiceOptions = loadConfiguration();
-

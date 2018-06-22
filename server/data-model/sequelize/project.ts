@@ -1,24 +1,5 @@
 import {Instance, Model} from "sequelize";
 
-export interface IProjectGridRegion {
-    x_min: number;
-    x_max: number;
-    y_min: number;
-    y_max: number;
-    z_min: number;
-    z_max: number;
-}
-
-export interface IProjectInput {
-    id?: string;
-    name?: string;
-    description?: string;
-    root_path?: string;
-    is_processing?: boolean;
-    sample_number?: number;
-    region_bounds?: IProjectGridRegion;
-}
-
 export interface IProjectAttributes {
     id?: string;
     name?: string;

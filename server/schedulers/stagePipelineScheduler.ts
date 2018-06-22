@@ -19,7 +19,7 @@ import {updatePipelineStageCounts} from "../data-model/sequelize/pipelineStagePe
 const MAX_KNOWN_INPUT_SKIP_COUNT = 1;
 const MAX_ASSIGN_PER_ITERATION = 50;
 
-export abstract class PipelineScheduler extends BasePipelineScheduler {
+export abstract class StagePipelineScheduler extends BasePipelineScheduler {
 
     protected _pipelineStage: IPipelineStage;
 
@@ -28,13 +28,9 @@ export abstract class PipelineScheduler extends BasePipelineScheduler {
     private _knownInputSkipCheckCount: number = 0;
 
     protected constructor(pipelineStage: IPipelineStage, project: IProject) {
-        super(project);
+        super(project, pipelineStage);
 
         this._pipelineStage = pipelineStage;
-    }
-
-    protected getStageId(): string {
-        return this._pipelineStage.id;
     }
 
     protected async createOutputStageConnector(connector: ProjectDatabaseConnector): Promise<StageTableConnector> {
@@ -93,11 +89,11 @@ export abstract class PipelineScheduler extends BasePipelineScheduler {
 
         // Use cluster proxies as last resort when behind.
         let workers = allWorkers.filter(worker => worker.is_in_scheduler_pool).sort((a, b) => {
-            if (a.is_cluster_proxy === b.is_cluster_proxy) {
+            if ((a.cluster_work_capacity <= 0) === (b.cluster_work_capacity <= 0)) {
                 return 0;
             }
 
-            return a.is_cluster_proxy ? 1 : -1;
+            return a.cluster_work_capacity <= 0 ? 1 : -1;
         });
 
         if (workers.length === 0) {
@@ -121,7 +117,9 @@ export abstract class PipelineScheduler extends BasePipelineScheduler {
 
             const real_time_worker = await PipelineWorkerClient.Instance().queryWorker(worker);
 
-            let taskLoad = real_time_worker ? real_time_worker.task_load : -1;
+            const isClusterProxy = real_time_worker.cluster_work_capacity > 0;
+
+            let taskLoad = real_time_worker ? (isClusterProxy ? real_time_worker.cluster_task_load : real_time_worker.local_task_load) : -1;
 
             if (taskLoad < 0) {
                 debug(`worker ${worker.name} skipped (unknown/unreported task load)`);
@@ -131,16 +129,18 @@ export abstract class PipelineScheduler extends BasePipelineScheduler {
             const task = await PersistentStorageManager.Instance().TaskDefinitions.findById(this._pipelineStage.task_id);
 
             // TODO Get worker value for work units for this task, if applicable.
-            const workUnits = worker.is_cluster_proxy ? 1 : task.work_units;
+            const workUnits = isClusterProxy ? task.cluster_work_units : task.local_work_units;
 
-            let capacity = worker.work_unit_capacity - taskLoad;
+            let capacity = (isClusterProxy ? real_time_worker.cluster_work_capacity : real_time_worker.local_work_capacity);
 
-            if ((capacity + 0.000001) < workUnits) {
-                debug(`worker ${worker.name} has insufficient capacity: ${capacity} of ${worker.work_unit_capacity}`);
+            let availableLoad = capacity - taskLoad;
+
+            if ((availableLoad + 0.000001) < workUnits) {
+                debug(`worker ${worker.name} has insufficient capacity: ${availableLoad} of ${capacity}`);
                 return true;
             }
 
-            debug(`worker ${worker.name} has load ${taskLoad} of capacity ${worker.work_unit_capacity}`);
+            debug(`worker ${worker.name} has load ${taskLoad} of capacity ${capacity}`);
 
             let waitingToProcess = await this._outputStageConnector.loadToProcess(MAX_ASSIGN_PER_ITERATION);
 
@@ -168,8 +168,8 @@ export abstract class PipelineScheduler extends BasePipelineScheduler {
 
                     let outputPath = path.join(this._pipelineStage.dst_path, pipelineTile.relative_path);
 
-                    fse.ensureDirSync(outputPath);
-                    fse.chmodSync(outputPath, 0o775);
+                    // fse.ensureDirSync(outputPath);
+                    // fse.chmodSync(outputPath, 0o775);
 
                     const log_root_path = this._project.log_root_path || this._pipelineStage.dst_path || `/tmp/${this._pipelineStage.id}`;
 
@@ -178,6 +178,7 @@ export abstract class PipelineScheduler extends BasePipelineScheduler {
                     let taskExecution = await this._outputStageConnector.createTaskExecution(worker, task, {
                         pipelineStageId: this._pipelineStage.id,
                         tileId: pipelineTile.relative_path,
+                        outputPath,
                         logFile
                     });
 
@@ -215,7 +216,11 @@ export abstract class PipelineScheduler extends BasePipelineScheduler {
                         // worker (i.e., 1 per job).  Currently they only return the actual value.
                         taskLoad += workUnits;
 
-                        worker.task_load = taskLoad;
+                        if (isClusterProxy) {
+                            worker.cluster_task_load = taskLoad;
+                        } else {
+                            worker.local_task_load = taskLoad;
+                        }
 
                         pipelineTile.this_stage_status = TilePipelineStatus.Processing;
 
@@ -223,24 +228,14 @@ export abstract class PipelineScheduler extends BasePipelineScheduler {
 
                         await this._outputStageConnector.deleteToProcessTile(toProcessTile);
 
-                        const completeFile = path.join(`${taskExecution.resolved_log_path}-done.txt`);
-
-                        try {
-                            if (fse.existsSync(completeFile)) {
-                                fse.unlinkSync(completeFile);
-                            }
-                        } catch (err) {
-                            debug(err);
-                        }
-
                         debug(`started task on worker ${worker.name} with execution id ${taskExecution.id}`);
 
-                        capacity = worker.work_unit_capacity - taskLoad;
+                        availableLoad = isClusterProxy ? worker.cluster_work_capacity : worker.local_work_capacity - taskLoad;
 
                         // Does this worker have enough capacity to handle more tiles from this task given the work units
                         // per task on this worker.
-                        if ((capacity + 0.00001) < workUnits) {
-                            debug(`worker ${worker.name} has insufficient capacity ${capacity} of ${worker.work_unit_capacity} for further tasks`);
+                        if ((availableLoad + 0.00001) < workUnits) {
+                            debug(`worker ${worker.name} has insufficient capacity ${availableLoad} of ${capacity} for further tasks`);
                             return false;
                         }
 

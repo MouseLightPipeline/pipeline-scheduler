@@ -24,12 +24,13 @@ export interface IPipelineWorker {
     total_memory?: number;
     free_memory?: number;
     load_average?: number;
-    work_unit_capacity?: number;
+    local_work_capacity?: number;
+    cluster_work_capacity: number;
     last_seen?: Date;
     status?: PipelineWorkerStatus;
     is_in_scheduler_pool?: boolean;
-    is_cluster_proxy?: boolean;
-    task_load?: number;
+    local_task_load?: number;
+    cluster_task_load?: number;
     created_at?: Date;
     updated_at?: Date;
     deleted_at?: Date;
@@ -39,7 +40,8 @@ export const TableName = "PipelineWorkers";
 
 export function sequelizeImport(sequelize, DataTypes) {
     const _workerStatusMap = new Map<string, PipelineWorkerStatus>();
-    const _workerTaskLoadMap = new Map<string, number>();
+    const _workerLocalTaskLoadMap = new Map<string, number>();
+    const _workerClusterTaskLoadMap = new Map<string, number>();
 
     const PipelineWorker = sequelize.define(TableName, {
         id: {
@@ -95,7 +97,11 @@ export function sequelizeImport(sequelize, DataTypes) {
             type: DataTypes.DOUBLE,
             defaultValue: 0
         },
-        work_unit_capacity: {
+        local_work_capacity: {
+            type: DataTypes.DOUBLE,
+            defaultValue: 0
+        },
+        cluster_work_capacity: {
             type: DataTypes.DOUBLE,
             defaultValue: 0
         },
@@ -103,10 +109,6 @@ export function sequelizeImport(sequelize, DataTypes) {
             type: DataTypes.DATE
         },
         is_in_scheduler_pool: {
-            type: DataTypes.BOOLEAN,
-            defaultValue: false
-        },
-        is_cluster_proxy: {
             type: DataTypes.BOOLEAN,
             defaultValue: false
         },
@@ -126,20 +128,36 @@ export function sequelizeImport(sequelize, DataTypes) {
                 _workerStatusMap[this.id] = val;
             }
         },
-        task_load: {
+        local_task_load: {
             type: DataTypes.VIRTUAL,
             get() {
-                let count = _workerTaskLoadMap[this.id];
+                let count = _workerClusterTaskLoadMap[this.id];
 
                 if (count == null) {
                     count = -1;
-                    _workerTaskLoadMap[this.id] = count;
+                    _workerClusterTaskLoadMap[this.id] = count;
                 }
 
                 return count;
             },
             set(val) {
-                _workerTaskLoadMap[this.id] = val;
+                _workerClusterTaskLoadMap[this.id] = val;
+            }
+        },
+        cluster_task_load: {
+            type: DataTypes.VIRTUAL,
+            get() {
+                let count = _workerLocalTaskLoadMap[this.id];
+
+                if (count == null) {
+                    count = -1;
+                    _workerLocalTaskLoadMap[this.id] = count;
+                }
+
+                return count;
+            },
+            set(val) {
+                _workerLocalTaskLoadMap[this.id] = val;
             }
         }
     }, {

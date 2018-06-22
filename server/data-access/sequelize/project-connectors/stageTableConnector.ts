@@ -107,10 +107,10 @@ export class StageTableConnector {
         this._tableBaseName = id;
     }
 
-    public async initialize() {
+    public async initialize(): Promise<void> {
         this.defineTables();
 
-        return this._connection.sync();
+        await this._connection.sync();
     }
 
     // -----------------------------------------------------------------------------------------------------------------
@@ -407,6 +407,7 @@ export class StageTableConnector {
                 defaultValue: null
             }
         }, {
+            tableName: this._tableBaseName,
             timestamps: true,
             createdAt: "created_at",
             updatedAt: "updated_at",

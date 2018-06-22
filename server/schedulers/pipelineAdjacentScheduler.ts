@@ -11,7 +11,7 @@ import {
 } from "./basePipelineScheduler";
 import {IPipelineStage, PipelineStageMethod} from "../data-model/sequelize/pipelineStage";
 import {IPipelineTile, IPipelineTileAttributes} from "../data-access/sequelize/project-connectors/stageTableConnector";
-import {PipelineScheduler} from "./stagePipelineScheduler";
+import {StagePipelineScheduler} from "./stagePipelineScheduler";
 import {
     AdjacentTileStageConnector, IAdjacentTile,
     IAdjacentTileAttributes
@@ -26,7 +26,7 @@ interface IMuxUpdateLists extends IMuxTileLists {
     toDeleteAdjacentMapIndex: string[];
 }
 
-export class PipelineAdjacentScheduler extends PipelineScheduler {
+export class PipelineAdjacentScheduler extends StagePipelineScheduler {
 
     public constructor(pipelineStage: IPipelineStage, project: IProject) {
         super(pipelineStage, project);
@@ -129,7 +129,7 @@ export class PipelineAdjacentScheduler extends PipelineScheduler {
 
         await this.OutputStageConnector.deleteAdjacent(muxUpdateLists.toDeleteAdjacentMapIndex);
 
-        debug(`${(performance.now() - t0).toFixed(3)} ms to mux ${this._pipelineStage.id}`);
+        debug(`${this._source.name}: mux ${(performance.now() - t0).toFixed(3)} ms`);
 
         // Insert, update, delete handled by base.
         return muxUpdateLists;

@@ -3,7 +3,7 @@ const Influx = require("influx");
 import {MetricsOptions} from "../../options/coreServicesOptions";
 import {CompletionResult} from "../../data-model/taskExecution";
 
-const debug = require("debug")("ndb:search:database-connector");
+const debug = require("debug")("pipeline:coordinator-api:metrics-database");
 
 export class MetricsConnector {
     private static _instance: MetricsConnector = null;
@@ -67,15 +67,24 @@ export class MetricsConnector {
     }
 
     private async migrate() {
-        const influx = new Influx.InfluxDB({
-            host: MetricsOptions.host,
-            port: MetricsOptions.port
+        return new Promise<void>(async (resolve) => {
+            try {
+                const influx = new Influx.InfluxDB({
+                    host: MetricsOptions.host,
+                    port: MetricsOptions.port
+                });
+
+                const names = await influx.getDatabaseNames();
+
+                if (!names.includes(MetricsOptions.taskDatabase)) {
+                    await influx.createDatabase(MetricsOptions.taskDatabase);
+                }
+
+                debug(`successful connection to metrics database`);
+            } catch {
+                debug("failed to connect to metrics database; delaying 10 seconds");
+                setTimeout(() => this.migrate(), 10000);
+            }
         });
-
-        const names = await influx.getDatabaseNames();
-
-        if (!names.includes(MetricsOptions.taskDatabase)) {
-            await influx.createDatabase(MetricsOptions.taskDatabase);
-        }
     }
 }

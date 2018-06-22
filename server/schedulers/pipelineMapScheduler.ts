@@ -5,12 +5,12 @@ const debug = require("debug")("pipeline:scheduler:map-scheduler");
 
 import {IPipelineStage} from "../data-model/sequelize/pipelineStage";
 
-import {PipelineScheduler} from "./stagePipelineScheduler";
+import {StagePipelineScheduler} from "./stagePipelineScheduler";
 import {IPipelineTile} from "../data-access/sequelize/project-connectors/stageTableConnector";
 import {DefaultPipelineIdKey, IMuxTileLists, TilePipelineStatus} from "./basePipelineScheduler";
 import {IProject} from "../data-model/sequelize/project";
 
-export class PipelineMapScheduler extends PipelineScheduler {
+export class PipelineMapScheduler extends StagePipelineScheduler {
 
     public constructor(pipelineStage: IPipelineStage, project: IProject) {
         super(pipelineStage, project);
@@ -61,12 +61,6 @@ export class PipelineMapScheduler extends PipelineScheduler {
         }, {});
 
         sorted.toUpdate = toUpdate.map(inputTile => {
-            /*
-            const existingTileIdx = _.findIndex(knownOutput, t => t.relative_path === inputTile.relative_path);
-
-            const existingTile = knownOutput[existingTileIdx];
-            */
-
             const existingTile = existingTilePaths[inputTile.relative_path];
 
             if (existingTile === null) {
@@ -96,7 +90,7 @@ export class PipelineMapScheduler extends PipelineScheduler {
             }
         }).filter(t => t !== null);
 
-        debug(`${(performance.now() - t0).toFixed(3)} ms to map update ${this._pipelineStage.id}`);
+        debug(`${this._source.name}: ${(performance.now() - t0).toFixed(3)} ms mux`);
 
         return sorted;
     }
