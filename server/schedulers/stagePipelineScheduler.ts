@@ -1,6 +1,5 @@
 import * as  path from "path";
 
-const fse = require("fs-extra");
 const debug = require("debug")("pipeline:scheduler:stage-pipeline-scheduler");
 
 import {PipelineWorkerClient} from "../graphql/pipelineWorkerClient";
@@ -73,7 +72,7 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
 
             this._knownInputSkipCheckCount = 0;
         } else {
-            debug(`skipping new to queue check with available to process (skip count ${this._knownInputSkipCheckCount} of ${MAX_KNOWN_INPUT_SKIP_COUNT})`);
+            debug(`${this._source.name}: skipping new to queue check with available to process (skip count ${this._knownInputSkipCheckCount} of ${MAX_KNOWN_INPUT_SKIP_COUNT})`);
             this._knownInputSkipCheckCount++;
         }
 
@@ -87,17 +86,10 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
 
         let allWorkers = await PersistentStorageManager.Instance().getPipelineWorkers();
 
-        // Use cluster proxies as last resort when behind.
-        let workers = allWorkers.filter(worker => worker.is_in_scheduler_pool).sort((a, b) => {
-            if ((a.cluster_work_capacity <= 0) === (b.cluster_work_capacity <= 0)) {
-                return 0;
-            }
-
-            return a.cluster_work_capacity <= 0 ? 1 : -1;
-        });
+        let workers = allWorkers.filter(worker => worker.is_in_scheduler_pool);
 
         if (workers.length === 0) {
-            debug(`no available workers to schedule (of ${allWorkers.length} known)`);
+            debug(`${this._source.name}: no available workers to schedule (of ${allWorkers.length} known)`);
             return;
         }
 
@@ -114,33 +106,19 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
         //
         // The goal is to fill a worker completely before moving on to the next worker.
         await this.queue(workers, async (worker: IPipelineWorker) => {
-
             const real_time_worker = await PipelineWorkerClient.Instance().queryWorker(worker);
 
-            const isClusterProxy = real_time_worker.cluster_work_capacity > 0;
-
-            let taskLoad = real_time_worker ? (isClusterProxy ? real_time_worker.cluster_task_load : real_time_worker.local_task_load) : -1;
-
-            if (taskLoad < 0) {
-                debug(`worker ${worker.name} skipped (unknown/unreported task load)`);
+            if (real_time_worker.local_task_load < 0 && real_time_worker.cluster_task_load < 0) {
+                debug(`worker ${worker.name} skipped (unknown/unreported task loads)`);
                 return true;
             }
 
             const task = await PersistentStorageManager.Instance().TaskDefinitions.findById(this._pipelineStage.task_id);
 
-            // TODO Get worker value for work units for this task, if applicable.
-            const workUnits = isClusterProxy ? task.cluster_work_units : task.local_work_units;
-
-            let capacity = (isClusterProxy ? real_time_worker.cluster_work_capacity : real_time_worker.local_work_capacity);
-
-            let availableLoad = capacity - taskLoad;
-
-            if ((availableLoad + 0.000001) < workUnits) {
-                debug(`worker ${worker.name} has insufficient capacity: ${availableLoad} of ${capacity}`);
+            if (((real_time_worker.local_task_load + task.local_work_units) > real_time_worker.local_work_capacity) && ((real_time_worker.cluster_task_load + task.cluster_work_units) > real_time_worker.cluster_work_capacity)) {
+                debug(`${this._source.name}: worker ${worker.name} has insufficient capacity`);
                 return true;
             }
-
-            debug(`worker ${worker.name} has load ${taskLoad} of capacity ${capacity}`);
 
             let waitingToProcess = await this._outputStageConnector.loadToProcess(MAX_ASSIGN_PER_ITERATION);
 
@@ -148,7 +126,7 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
                 return false;
             }
 
-            debug(`scheduling worker from available ${waitingToProcess.length} pending`);
+            debug(`${this._source.name}: scheduling worker from available ${waitingToProcess.length} pending`);
 
             // Will continue through all tiles until the worker reaches full capacity
             let stillLookingForTilesForWorker = await this.queue(waitingToProcess, async (toProcessTile: IToProcessTileAttributes) => {
@@ -167,9 +145,6 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
                     }
 
                     let outputPath = path.join(this._pipelineStage.dst_path, pipelineTile.relative_path);
-
-                    // fse.ensureDirSync(outputPath);
-                    // fse.chmodSync(outputPath, 0o775);
 
                     const log_root_path = this._project.log_root_path || this._pipelineStage.dst_path || `/tmp/${this._pipelineStage.id}`;
 
@@ -190,37 +165,32 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
 
                     await taskExecution.update({resolved_script_args: JSON.stringify(args)});
 
-                    let taskResponse = await PipelineWorkerClient.Instance().startTaskExecution(worker, taskExecution.get({plain: true}));
+                    let startTaskResponse = await PipelineWorkerClient.Instance().startTaskExecution(worker, taskExecution.get({plain: true}));
 
-                    if (taskResponse != null) {
-                        let now = new Date();
+                    if (startTaskResponse != null && startTaskResponse.taskExecution != null) {
+                        const responseExecution = startTaskResponse.taskExecution;
+                        const now = new Date();
 
                         await this._outputStageConnector.insertInProcessTile({
                             relative_path: pipelineTile.relative_path,
                             worker_id: worker.id,
                             worker_last_seen: now,
                             task_execution_id: taskExecution.id,
-                            worker_task_execution_id: taskResponse.id,
+                            worker_task_execution_id: responseExecution.id,
                             created_at: now,
                             updated_at: now
                         });
 
                         await taskExecution.update({
-                            submitted_at: taskResponse.submitted_at,
-                            started_at: taskResponse.started_at,
-                            completed_at: taskResponse.completed_at
+                            worker_task_execution_id: responseExecution.id,
+                            queue_type: responseExecution.queue_type,
+                            resolved_script_args: responseExecution.resolved_script_args, // Worker may have substituted, e.g., IS_CLUSTER_JOB
+                            local_work_units: responseExecution.local_work_units,
+                            cluster_work_units: responseExecution.cluster_work_units,
+                            submitted_at: responseExecution.submitted_at,
+                            started_at: responseExecution.started_at,
+                            completed_at: responseExecution.completed_at
                         });
-
-                        // TODO: Should use value returned from taskExecution in case it is worker-dependent
-                        // In order to do that, workers must be updated to return the right value when a cluster
-                        // worker (i.e., 1 per job).  Currently they only return the actual value.
-                        taskLoad += workUnits;
-
-                        if (isClusterProxy) {
-                            worker.cluster_task_load = taskLoad;
-                        } else {
-                            worker.local_task_load = taskLoad;
-                        }
 
                         pipelineTile.this_stage_status = TilePipelineStatus.Processing;
 
@@ -228,28 +198,32 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
 
                         await this._outputStageConnector.deleteToProcessTile(toProcessTile);
 
-                        debug(`started task on worker ${worker.name} with execution id ${taskExecution.id}`);
-
-                        availableLoad = isClusterProxy ? worker.cluster_work_capacity : worker.local_work_capacity - taskLoad;
+                        debug(`${this._source.name}: started task on worker ${worker.name} with execution id ${taskExecution.id}`);
 
                         // Does this worker have enough capacity to handle more tiles from this task given the work units
                         // per task on this worker.
-                        if ((availableLoad + 0.00001) < workUnits) {
-                            debug(`worker ${worker.name} has insufficient capacity ${availableLoad} of ${capacity} for further tasks`);
+                        if (((startTaskResponse.localTaskLoad + task.local_work_units) > real_time_worker.local_work_capacity) && ((startTaskResponse.clusterTaskLoad + task.cluster_work_units) > real_time_worker.cluster_work_capacity)) {
+                            debug(`${this._source.name}: worker ${worker.name} has insufficient capacity for further tasks`);
                             return false;
                         }
 
                         return true;
                     } else {
-                        debug("start task did not error, however returned null");
+                        if (startTaskResponse != null) {
+                            if (((startTaskResponse.localTaskLoad + task.local_work_units) > real_time_worker.local_work_capacity) && ((startTaskResponse.clusterTaskLoad + task.cluster_work_units) > real_time_worker.cluster_work_capacity)) {
+                                debug(`${this._source.name}: worker ${worker.name} has insufficient capacity for further tasks`);
+                                return false;
+                            }
+                        }
+                        debug(`${this._source.name}: start task did not error, however returned null`);
                     }
                 } catch (err) {
-                    debug(`worker ${worker.name} with error starting execution ${err}`);
+                    debug(`${this._source.name}: worker ${worker.name} with error starting execution ${err}`);
                     return false;
                 }
 
                 if (!this.IsProcessingRequested || this.IsExitRequested) {
-                    debug("cancel requested - exiting stage worker");
+                    debug(`${this._source.name}: cancel requested - exiting stage worker`);
                     return false;
                 }
 
@@ -258,7 +232,7 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
             });
 
             if (!this.IsProcessingRequested || this.IsExitRequested) {
-                debug("cancel requested - exiting stage worker");
+                debug(`${this._source.name}: cancel requested - exiting stage worker`);
                 return false;
             }
 

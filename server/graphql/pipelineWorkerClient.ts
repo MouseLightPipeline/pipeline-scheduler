@@ -8,9 +8,10 @@ import {IPipelineWorker, PipelineWorkerStatus} from "../data-model/sequelize/pip
 import {ITaskExecutionAttributes} from "../data-model/taskExecution";
 import {PersistentStorageManager} from "../data-access/sequelize/databaseConnector";
 
-export interface ITaskExecutionStatus {
-    workerResponded: boolean;
+export interface IStartTaskResponse {
     taskExecution: ITaskExecutionAttributes;
+    localTaskLoad: number;
+    clusterTaskLoad: number;
 }
 
 export interface IClientWorker {
@@ -65,7 +66,7 @@ export class PipelineWorkerClient {
         return client;
     }
 
-    public async startTaskExecution(worker: IPipelineWorker, taskInput: ITaskExecutionAttributes): Promise<ITaskExecutionAttributes> {
+    public async startTaskExecution(worker: IPipelineWorker, taskInput: ITaskExecutionAttributes): Promise<IStartTaskResponse> {
         const client = this.getClient(worker);
 
         if (client === null) {
@@ -77,14 +78,21 @@ export class PipelineWorkerClient {
                 mutation: gql`
                 mutation startTask($taskInput: String!) {
                     startTask(taskInput: $taskInput) {
+                      taskExecution {
                         id
+                        queue_type
+                        resolved_script_args
                         completion_status_code
                         execution_status_code
                         last_process_status_code
                         local_work_units
+                        cluster_work_units
                         submitted_at
                         started_at
                         completed_at
+                      }
+                      localTaskLoad
+                      clusterTaskLoad
                     }
                 }`,
                 variables: {
@@ -95,10 +103,8 @@ export class PipelineWorkerClient {
             return response.data.startTask;
         } catch (err) {
             await PipelineWorkerClient.markWorkerUnavailable(worker);
-            debug(`error submitting task to worker ${worker.name}`);
+            throw(err);
         }
-
-        return null;
     }
 
     public async queryWorker(worker: IPipelineWorker): Promise<IClientWorker> {

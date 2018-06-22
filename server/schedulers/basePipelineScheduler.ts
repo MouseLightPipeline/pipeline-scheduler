@@ -1,7 +1,6 @@
 import {isNullOrUndefined} from "util";
 import * as _ from "lodash";
 
-const fse = require("fs-extra");
 const debug = require("debug")("pipeline:scheduler:base-pipeline-scheduler");
 
 import {updatePipelineStagePerformance} from "../data-model/sequelize/pipelineStagePerformance";
@@ -271,7 +270,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
             case "EXPECTED_EXIT_CODE":
                 return isNullOrUndefined(task.expected_exit_code) ? value : task.expected_exit_code.toString();
             case "IS_CLUSTER_JOB":
-                return worker.cluster_work_capacity > 0 ? "1" : "0";
+                return "IS_CLUSTER_JOB"; // Will be filled in by the worker
             case "TASK_ID":
                 return taskExecution.id;
         }

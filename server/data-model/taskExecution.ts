@@ -215,8 +215,6 @@ export function augmentTaskExecutionModel(Model: ITaskExecutionModel) {
 }
 
 async function createTaskExecutionWithInput(worker: IPipelineWorker, taskDefinition: ITaskDefinition, startTaskInput: IStartTaskInput): Promise<ITaskExecutionAttributes> {
-    const queueType: QueueType = worker.cluster_work_capacity > 0 ? QueueType.Cluster : QueueType.Local;
-
     return {
         worker_id: worker.id,
         worker_task_execution_id: null,
@@ -229,10 +227,10 @@ async function createTaskExecutionWithInput(worker: IPipelineWorker, taskDefinit
         resolved_script: await taskDefinition.getFullScriptPath(false),
         resolved_interpreter: taskDefinition.interpreter,
         resolved_script_args: null, // Will be filled later b/c may include execution id created after this is saved. JSON.stringify(startTaskInput.scriptArgs),
-        resolved_cluster_args: queueType === QueueType.Cluster ? JSON.parse(taskDefinition.cluster_args).arguments[0] : null,
+        resolved_cluster_args: JSON.parse(taskDefinition.cluster_args).arguments[0],
         resolved_log_path: startTaskInput.logFile,
         expected_exit_code: taskDefinition.expected_exit_code,
-        queue_type: queueType,
+        queue_type: null,
         job_id: null,
         job_name: null,
         execution_status_code: ExecutionStatus.Initializing,

@@ -1,5 +1,3 @@
-import {PersistentStorageManager} from "../databaseConnector";
-
 const sequelize = require("sequelize");
 const asyncUtils = require("async");
 import {Sequelize} from "sequelize";
