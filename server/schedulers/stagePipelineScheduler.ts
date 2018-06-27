@@ -116,7 +116,7 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
             const task = await PersistentStorageManager.Instance().TaskDefinitions.findById(this._pipelineStage.task_id);
 
             if (((real_time_worker.local_task_load + task.local_work_units) > real_time_worker.local_work_capacity) && ((real_time_worker.cluster_task_load + task.cluster_work_units) > real_time_worker.cluster_work_capacity)) {
-                debug(`${this._source.name}: worker ${worker.name} has insufficient capacity, ignoring worker [${real_time_worker.local_task_load} load of real_time_worker.local_work_capacity, ${real_time_worker.cluster_task_load} load of ${real_time_worker.cluster_work_capacity}]`);
+                debug(`${this._source.name}: worker ${worker.name} has insufficient capacity, ignoring worker [${real_time_worker.local_task_load} load of ${real_time_worker.local_work_capacity}, ${real_time_worker.cluster_task_load} load of ${real_time_worker.cluster_work_capacity}]`);
                 return true;
             }
 
@@ -200,22 +200,18 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
 
                         debug(`${this._source.name}: started task on worker ${worker.name} with execution id ${taskExecution.id}`);
 
-                        // Does this worker have enough capacity to handle more tiles from this task given the work units
-                        // per task on this worker.
-                        if (((startTaskResponse.localTaskLoad + task.local_work_units) > real_time_worker.local_work_capacity) && ((startTaskResponse.clusterTaskLoad + task.cluster_work_units) > real_time_worker.cluster_work_capacity)) {
-                            debug(`${this._source.name}: worker ${worker.name} has insufficient capacity for further tasks after last submission [${startTaskResponse.localTaskLoad}, ${startTaskResponse.clusterTaskLoad}]`);
-                            return false;
-                        }
-
                         return true;
                     } else {
                         if (startTaskResponse != null) {
                             if (((startTaskResponse.localTaskLoad + task.local_work_units) > real_time_worker.local_work_capacity) && ((startTaskResponse.clusterTaskLoad + task.cluster_work_units) > real_time_worker.cluster_work_capacity)) {
-                                debug(`${this._source.name}: worker ${worker.name} has insufficient capacity for further tasks, likely rejected [${startTaskResponse.localTaskLoad}, ${startTaskResponse.clusterTaskLoad}]`);
-                                return false;
+                                debug(`${this._source.name}: worker ${worker.name} rejected for insufficient capacity for further tasks [${startTaskResponse.localTaskLoad} load of ${real_time_worker.local_work_capacity}, ${startTaskResponse.clusterTaskLoad} load of ${real_time_worker.cluster_work_capacity}]`);
+                            } else {
+                                debug(`${this._source.name}: start task did not error, however returned null taskExecution`);
                             }
+                        } else {
+                            debug(`${this._source.name}: start task did not error, however returned null`);
                         }
-                        debug(`${this._source.name}: start task did not error, however returned null`);
+                        return false;
                     }
                 } catch (err) {
                     debug(`${this._source.name}: worker ${worker.name} with error starting execution ${err}`);
