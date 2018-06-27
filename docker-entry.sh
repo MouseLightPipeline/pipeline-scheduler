@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-logName=$(date '+%Y-%m-%d%H-%M-%S');
+logName=$(date '+%Y-%m-%d_%H-%M-%S');
 
 export DEBUG=pipeline*
 
-node server/pipelineSchedulerApp.js &> /var/log/pipeline/scheduler-${logName}.log
+mkdir -p /var/log/pipeline
 
-# sleep infinity
+node pipelineSchedulerApp.js &> /var/log/pipeline/scheduler-${logName}.log

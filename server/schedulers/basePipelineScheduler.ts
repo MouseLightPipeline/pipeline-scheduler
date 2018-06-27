@@ -89,12 +89,12 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         return this._source.id;
     }
 
-    public async run() {
+    public async run(): Promise<void> {
         if (this._isInitialized) {
             return;
         }
 
-        this.transitionToInitialized();
+        return this.transitionToEstablishDataConnection();
     }
 
     protected async updateToProcessQueue(): Promise<boolean> {
@@ -373,18 +373,11 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
     /*
      * State transitions
      */
-    private transitionToInitialized() {
+
+    private async transitionToEstablishDataConnection(): Promise<void> {
         try {
             this._isInitialized = true;
 
-            setImmediate(() => this.transitionToEstablishDataConnection());
-        } catch (err) {
-            debug(err);
-        }
-    }
-
-    private async transitionToEstablishDataConnection() {
-        try {
             if (this.IsExitRequested) {
                 return;
             }

@@ -42,10 +42,13 @@ export class SchedulerHub {
 
             if (worker) {
                 await worker.onTaskExecutionComplete(taskExecution);
+                return true;
             }
         } catch (err) {
             debug(err);
         }
+
+        return false;
     }
 
     private readonly _useChildProcessWorkers: boolean;

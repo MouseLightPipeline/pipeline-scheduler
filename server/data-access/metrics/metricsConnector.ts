@@ -1,7 +1,9 @@
+import {PersistentStorageManager} from "../sequelize/databaseConnector";
+
 const Influx = require("influx");
 
 import {MetricsOptions} from "../../options/coreServicesOptions";
-import {CompletionResult} from "../../data-model/taskExecution";
+import {ITaskExecutionAttributes} from "../../data-model/taskExecution";
 
 const debug = require("debug")("pipeline:coordinator-api:metrics-database");
 
@@ -19,28 +21,45 @@ export class MetricsConnector {
 
     public async initialize() {
         await this.migrate();
+
         this.createTaskExecutionConnection();
     }
 
-    public async writeTaskExecution(completion_status_code: CompletionResult, duration: number) {
+    public async writeTaskExecution(taskExecution: ITaskExecutionAttributes) {
         try {
             if (this.taskExecutionDatabase) {
-                this.taskExecutionDatabase.writePoints([
+                const duration_minutes = taskExecution.completed_at && taskExecution.started_at ? (taskExecution.completed_at.valueOf() - taskExecution.started_at.valueOf()) / 60000 : null;
+                const pending_duration_minutes = taskExecution.started_at && taskExecution.submitted_at ? (taskExecution.started_at.valueOf() - taskExecution.submitted_at.valueOf()) / 60000 : null;
+
+                const fields = {
+                    local_work_units: taskExecution.local_work_units,
+                    cluster_work_units: taskExecution.cluster_work_units,
+                    queue_type: taskExecution.queue_type,
+                    completion_status_code: taskExecution.completion_status_code,
+                    exit_code: taskExecution.exit_code,
+                    cpu_percent: taskExecution.max_cpu,
+                    memory_mb: taskExecution.max_memory,
+                    duration_minutes,
+                    pending_duration_minutes
+                };
+
+                await this.taskExecutionDatabase.writePoints([
                     {
                         measurement: "task_execution",
                         tags: {
-                            workerId: "unknown",
-                            workerName: "unknown"
+                            worker_id: taskExecution.worker_id,
+                            worker_name: (await PersistentStorageManager.Instance().getPipelineWorker(taskExecution.worker_id)).name,
+                            task_id: taskExecution.task_definition_id,
+                            pipeline_stage_id: taskExecution.pipeline_stage_id
                         },
-                        fields: {
-                            completion_status_code,
-                            duration
-                        },
+                        fields
                     }
-                ]).then();
+                ]);
+
+                debug("wrote task execution");
             }
         } catch (err) {
-            debug("loq query failed.");
+            debug("write task execution metrics failed.");
             debug(err);
         }
     }
@@ -54,12 +73,21 @@ export class MetricsConnector {
                 {
                     measurement: "task_execution",
                     fields: {
+                        local_work_units: Influx.FieldType.INTEGER,
+                        cluster_work_units: Influx.FieldType.INTEGER,
+                        queue_type: Influx.FieldType.INTEGER,
                         completion_status_code: Influx.FieldType.INTEGER,
-                        duration: Influx.FieldType.INTEGER
+                        exit_code: Influx.FieldType.INTEGER,
+                        cpu_percent: Influx.FieldType.FLOAT,
+                        memory_mb: Influx.FieldType.FLOAT,
+                        duration_minutes: Influx.FieldType.FLOAT,
+                        pending_duration_minutes: Influx.FieldType.FLOAT
                     },
                     tags: [
-                        "workerId",
-                        "workerName"
+                        "worker_id",
+                        "worker_name",
+                        "task_id",
+                        "pipeline_stage_id",
                     ]
                 }
             ]
@@ -81,6 +109,8 @@ export class MetricsConnector {
                 }
 
                 debug(`successful connection to metrics database`);
+
+                resolve();
             } catch {
                 debug("failed to connect to metrics database; delaying 10 seconds");
                 setTimeout(() => this.migrate(), 10000);
