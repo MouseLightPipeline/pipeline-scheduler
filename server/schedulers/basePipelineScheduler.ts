@@ -3,7 +3,6 @@ import * as _ from "lodash";
 
 const debug = require("debug")("pipeline:scheduler:base-pipeline-scheduler");
 
-import {updatePipelineStagePerformance} from "../data-model/sequelize/pipelineStagePerformance";
 import {ISchedulerInterface} from "./schedulerHub";
 import {IProject} from "../data-model/sequelize/project";
 import {
@@ -221,14 +220,6 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
             }
 
             await this._outputStageConnector.updateTileStatus(executionInfo.tile_id, tileStatus);
-
-            // Tile should be marked with status and not be present in any intermediate tables.
-            //// updateList.update(tile[DefaultPipelineIdKey], tileStatus);
-            //// await this._outputStageConnector.updateTileStatuses(updateList.ToUpdate);
-
-            if (tileStatus === TilePipelineStatus.Complete) {
-                updatePipelineStagePerformance(this.StageId, executionInfo);
-            }
 
             await this._outputStageConnector.deleteInProcess([executionInfo.tile_id]);
         }

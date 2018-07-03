@@ -13,7 +13,6 @@ import {
 } from "../data-access/sequelize/project-connectors/stageTableConnector";
 import {BasePipelineScheduler, DefaultPipelineIdKey, TilePipelineStatus} from "./basePipelineScheduler";
 import {ProjectDatabaseConnector} from "../data-access/sequelize/project-connectors/projectDatabaseConnector";
-import {updatePipelineStageCounts} from "../data-model/sequelize/pipelineStagePerformance";
 
 const MAX_KNOWN_INPUT_SKIP_COUNT = 1;
 const MAX_ASSIGN_PER_ITERATION = 50;
@@ -75,8 +74,6 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
             debug(`${this._source.name}: skipping new to queue check with available to process (skip count ${this._knownInputSkipCheckCount} of ${MAX_KNOWN_INPUT_SKIP_COUNT})`);
             this._knownInputSkipCheckCount++;
         }
-
-        updatePipelineStageCounts(this.StageId, await this._outputStageConnector.countInProcess(), await this._outputStageConnector.countToProcess());
 
         return available;
     }
@@ -217,22 +214,12 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
                     debug(`${this._source.name}: worker ${worker.name} with error starting execution ${err}`);
                     return false;
                 }
-
-                if (!this.IsProcessingRequested || this.IsExitRequested) {
-                    debug(`${this._source.name}: cancel requested - exiting stage worker`);
-                    return false;
-                }
-
-                // Did not start due to unavailability or error starting.  Return true to keep looking for a worker.
-                return true;
             });
 
             if (!this.IsProcessingRequested || this.IsExitRequested) {
                 debug(`${this._source.name}: cancel requested - exiting stage worker`);
                 return false;
             }
-
-            // debug(`worker search for tile ${toProcessTile[DefaultPipelineIdKey]} resolves with stillLookingForTilesForWorker: ${stillLookingForTilesForWorker}`);
 
             // If result is true, a worker was never found for the last tile so short circuit be returning a promise
             // that resolves to false.  Otherwise, the tile task was launched, so try the next one.
