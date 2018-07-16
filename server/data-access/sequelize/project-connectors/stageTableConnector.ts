@@ -48,9 +48,6 @@ export interface IPipelineTileAttributes {
     step_x?: number;
     step_y?: number;
     step_z?: number;
-    duration?: number;
-    cpu_high?: number;
-    memory_high?: number;
     created_at?: Date;
     updated_at?: Date;
 }
@@ -137,14 +134,6 @@ export class StageTableConnector {
         });
     }
 
-    public async loadTileThumbnailPath(x: number, y: number, z: number): Promise<IPipelineTile> {
-        return this._tileTable.findOne({where: {lat_x: x, lat_y: y, lat_z: z}});
-    }
-
-    public async loadTileStatusForPlane(zIndex: number): Promise<IPipelineTile[]> {
-        return this._tileTable.findAll({where: {lat_z: zIndex}});
-    }
-
     public async loadInProcess(): Promise<IInProcessTile[]> {
         return this._inProcessTable.findAll();
     }
@@ -206,59 +195,12 @@ export class StageTableConnector {
         await tile.update({this_stage_status: status});
     }
 
-    public async updateTileStatuses(toUpdate: Map<TilePipelineStatus, string[]>) {
-        if (!toUpdate) {
-            return;
-        }
-
-        return Promise.all(Array.from(toUpdate.keys()).map(async (status) => {
-            await this._tileTable.update({this_stage_status: status},
-                {where: {relative_path: {$in: toUpdate.get(status)}}});
-        }));
-    }
-
     public async deleteTiles(toDelete: string[]) {
         if (!toDelete || toDelete.length === 0) {
             return;
         }
 
         return this._tileTable.destroy({where: {relative_path: {$in: toDelete}}});
-    }
-
-    public async getTileCounts(): Promise<IPipelineStageTileCounts> {
-        const incomplete = await this._tileTable.count({where: {this_stage_status: TilePipelineStatus.Incomplete}});
-        const queued = await this._tileTable.count({where: {this_stage_status: TilePipelineStatus.Queued}});
-        const processing = await this._tileTable.count({where: {this_stage_status: TilePipelineStatus.Processing}});
-        const complete = await this._tileTable.count({where: {this_stage_status: TilePipelineStatus.Complete}});
-        const failed = await this._tileTable.count({where: {this_stage_status: TilePipelineStatus.Failed}});
-        const canceled = await this._tileTable.count({where: {this_stage_status: TilePipelineStatus.Canceled}});
-
-        return {
-            incomplete,
-            queued,
-            processing,
-            complete,
-            failed,
-            canceled
-        }
-    }
-
-    public async setTileStatus(tileIds: string[], status: TilePipelineStatus): Promise<IPipelineTileAttributes[]> {
-        const [affectedCount, affectedRows] = await this._tileTable.update({this_stage_status: status}, {
-            where: {relative_path: {$in: tileIds}},
-            returning: true
-        });
-
-        return affectedRows;
-    }
-
-    public async convertTileStatus(currentStatus: TilePipelineStatus, desiredStatus: TilePipelineStatus): Promise<IPipelineTileAttributes[]> {
-        const [affectedCount, affectedRows] = await this._tileTable.update({this_stage_status: desiredStatus}, {
-            where: {this_stage_status: currentStatus},
-            returning: true
-        });
-
-        return affectedRows;
     }
 
     // -----------------------------------------------------------------------------------------------------------------
@@ -389,18 +331,6 @@ export class StageTableConnector {
             step_z: {
                 type: DataTypes.INTEGER,
                 defaultValue: null
-            },
-            duration: {
-                type: DataTypes.DOUBLE,
-                defaultValue: 0
-            },
-            cpu_high: {
-                type: DataTypes.DOUBLE,
-                defaultValue: 0
-            },
-            memory_high: {
-                type: DataTypes.DOUBLE,
-                defaultValue: 0
             },
             user_data: {
                 type: DataTypes.TEXT,

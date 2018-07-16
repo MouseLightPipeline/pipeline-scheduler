@@ -37,8 +37,9 @@ export class MetricsConnector {
                     queue_type: taskExecution.queue_type,
                     completion_status_code: taskExecution.completion_status_code,
                     exit_code: taskExecution.exit_code,
-                    cpu_percent: taskExecution.max_cpu,
-                    memory_mb: taskExecution.max_memory,
+                    cpu_time_seconds: taskExecution.cpu_time_seconds,
+                    max_cpu_percent: taskExecution.max_cpu_percent,
+                    max_memory_mb: taskExecution.max_memory_mb,
                     duration_minutes,
                     pending_duration_minutes
                 };
@@ -78,8 +79,9 @@ export class MetricsConnector {
                         queue_type: Influx.FieldType.INTEGER,
                         completion_status_code: Influx.FieldType.INTEGER,
                         exit_code: Influx.FieldType.INTEGER,
-                        cpu_percent: Influx.FieldType.FLOAT,
-                        memory_mb: Influx.FieldType.FLOAT,
+                        cpu_time_seconds: Influx.FieldType.FLOAT,
+                        max_cpu_percent: Influx.FieldType.FLOAT,
+                        max_memory_mb: Influx.FieldType.FLOAT,
                         duration_minutes: Influx.FieldType.FLOAT,
                         pending_duration_minutes: Influx.FieldType.FLOAT
                     },

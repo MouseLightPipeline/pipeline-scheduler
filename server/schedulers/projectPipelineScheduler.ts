@@ -16,7 +16,7 @@ const tileStatusLastJsonFile = tileStatusJsonFile + ".last";
 import {
     BasePipelineScheduler, DefaultPipelineIdKey, TilePipelineStatus, IMuxTileLists
 } from "./basePipelineScheduler";
-import {IProject, IProjectAttributes} from "../data-model/sequelize/project";
+import {IProject, IProjectAttributes, ProjectInputSourceState} from "../data-model/sequelize/project";
 import {
     IPipelineTile, IPipelineTileAttributes,
     StageTableConnector
@@ -24,6 +24,7 @@ import {
 import {isNullOrUndefined} from "util";
 import {ProjectDatabaseConnector} from "../data-access/sequelize/project-connectors/projectDatabaseConnector";
 import {ServiceOptions} from "../options/serverOptions";
+import {PipelineApiClient} from "../graphql/pipelineApiClient";
 
 interface IPosition {
     x: number;
@@ -155,6 +156,11 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
             }
         });
 
+        if (!fse.existsSync(root)) {
+            await PipelineApiClient.Instance().updateProject(this._project.id, ProjectInputSourceState.BadLocation);
+            return;
+        }
+
         let dataFile = path.join(root, pipelineInputJsonFile);
 
         if (!fse.existsSync(dataFile)) {
@@ -163,9 +169,14 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
             dataFile = path.join(root, dashboardJsonFile);
 
             if (!fse.existsSync(dataFile)) {
+                await PipelineApiClient.Instance().updateProject(this._project.id, ProjectInputSourceState.Missing);
                 debug(`${dashboardJsonFile} also does not exist in the project root path ${dataFile} - skipping tile update`);
                 return [];
             }
+
+            await PipelineApiClient.Instance().updateProject(this._project.id, ProjectInputSourceState.Dashboard);
+        } else {
+            await PipelineApiClient.Instance().updateProject(this._project.id, ProjectInputSourceState.Pipeline);
         }
 
         let projectUpdate: IProjectAttributes = {

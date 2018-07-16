@@ -19,6 +19,10 @@ const coreServicesOptions = {
         port: 8086,
         taskDatabase: "task_metrics_db"
     },
+    apiServer: {
+        host: "pipeline-api",
+        port: 6001,
+    },
     messageQueue: {
         host: "pipeline-message-queue",
         port: 5672,
@@ -44,6 +48,13 @@ function loadDatabaseOptions(options: any): any {
     return options;
 }
 
+function loadApiServerOptions(options: any) {
+    options.host = process.env.PIPELINE_CORE_SERVICES_HOST || options.host;
+    options.port = parseInt(process.env.PIPELINE_API_PORT) || options.port;
+
+    return options;
+}
+
 function loadMessageQueueOptions(options: any) {
     options.host = process.env.PIPELINE_CORE_SERVICES_HOST || options.host;
     options.port = parseInt(process.env.PIPELINE_MESSAGE_PORT) || options.port;
@@ -58,6 +69,7 @@ function loadOptions() {
     // When outside a pure container environment.
     options.database = loadDatabaseOptions(options.database);
     options.metricsDatabase = loadMetricsDatabaseOptions(options.metricsDatabase);
+    options.apiServer = loadApiServerOptions(options.apiServer);
     options.messageQueue = loadMessageQueueOptions(options.messageQueue);
 
     return options;
@@ -68,5 +80,7 @@ export const CoreServicesOptions = loadOptions();
 export const SequelizeOptions = CoreServicesOptions.database;
 
 export const MetricsOptions = CoreServicesOptions.metricsDatabase;
+
+export const ApiServerOptions = CoreServicesOptions.apiServer;
 
 export const MessageQueueOptions = CoreServicesOptions.messageQueue;

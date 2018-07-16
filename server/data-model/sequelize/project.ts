@@ -1,5 +1,20 @@
 import {Instance, Model} from "sequelize";
 
+export enum ProjectInputSourceState {
+    Unknown = 0,
+    BadLocation = 1,
+    Missing = 2,
+    Dashboard = 3,
+    Pipeline = 4
+}
+
+export interface IProjectInput {
+    id: string;
+    input_source_state?: ProjectInputSourceState;
+    last_seen_input_source?: Date;
+    last_checked_input_source?: Date;
+}
+
 export interface IProjectAttributes {
     id?: string;
     name?: string;

@@ -1,7 +1,7 @@
 import {FindOptions, Instance, Model, Sequelize} from "sequelize";
 
 import {isNullOrUndefined} from "util";
-import {IPipelineWorker, QueueType} from "./sequelize/pipelineWorker";
+import {IPipelineWorker} from "./sequelize/pipelineWorker";
 import {ITaskDefinition} from "./sequelize/taskDefinition";
 
 export interface IStartTaskInput {
@@ -59,8 +59,9 @@ export interface ITaskExecutionAttributes {
     execution_status_code?: ExecutionStatus;
     completion_status_code?: CompletionResult;
     last_process_status_code?: number;
-    max_memory?: number;
-    max_cpu?: number;
+    cpu_time_seconds?: number;
+    max_cpu_percent?: number;
+    max_memory_mb?: number;
     exit_code?: number;
     submitted_at?: Date;
     started_at?: Date;
@@ -156,10 +157,13 @@ export function createTaskExecutionTable(sequelize: Sequelize, tableName: string
         last_process_status_code: {
             type: DataTypes.INTEGER
         },
-        max_memory: {
+        cpu_time_seconds: {
             type: DataTypes.FLOAT
         },
-        max_cpu: {
+        max_cpu_percent: {
+            type: DataTypes.FLOAT
+        },
+        max_memory_mb: {
             type: DataTypes.FLOAT
         },
         exit_code: {
@@ -236,8 +240,9 @@ async function createTaskExecutionWithInput(worker: IPipelineWorker, taskDefinit
         execution_status_code: ExecutionStatus.Initializing,
         completion_status_code: CompletionResult.Incomplete,
         last_process_status_code: null,
-        max_memory: NaN,
-        max_cpu: NaN,
+        cpu_time_seconds: NaN,
+        max_cpu_percent: NaN,
+        max_memory_mb: NaN,
         exit_code: null,
         submitted_at: null,
         started_at: null,

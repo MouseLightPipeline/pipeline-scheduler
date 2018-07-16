@@ -256,9 +256,6 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
                     step_x: inputTile.step_x,
                     step_y: inputTile.step_y,
                     step_z: inputTile.step_z,
-                    duration: 0,
-                    cpu_high: 0,
-                    memory_high: 0,
                     created_at: now,
                     updated_at: now
                 }
