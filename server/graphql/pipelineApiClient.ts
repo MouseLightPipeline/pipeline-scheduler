@@ -54,7 +54,7 @@ export class PipelineApiClient {
         const projectInput: IProjectInput = {
             id,
             input_source_state: state,
-            last_checked_input_source: new Date()
+            last_checked_input_source: (new Date()).valueOf()
         };
 
         if (state >= ProjectInputSourceState.Dashboard) {
@@ -64,19 +64,19 @@ export class PipelineApiClient {
         try {
             await client.mutate({
                 mutation: gql`
-                mutation updateProject($projectInput: ProjectInput) {
-                    startTask(projectInput: $projectInput) {
+                mutation updateProject($project: ProjectInput) {
+                    updateProject(project: $project) {
                       project {
                         id
                       }
                     }
                 }`,
                 variables: {
-                    projectInput: JSON.stringify(projectInput)
+                    project: projectInput
                 }
             });
         } catch (err) {
-
+            debug(err);
         }
     }
 }

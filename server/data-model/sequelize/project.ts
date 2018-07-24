@@ -11,8 +11,8 @@ export enum ProjectInputSourceState {
 export interface IProjectInput {
     id: string;
     input_source_state?: ProjectInputSourceState;
-    last_seen_input_source?: Date;
-    last_checked_input_source?: Date;
+    last_seen_input_source?: Date | number;
+    last_checked_input_source?: Date | number;
 }
 
 export interface IProjectAttributes {
