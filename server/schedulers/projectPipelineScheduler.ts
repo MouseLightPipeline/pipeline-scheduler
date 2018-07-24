@@ -158,7 +158,7 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
 
         if (!fse.existsSync(root)) {
             await PipelineApiClient.Instance().updateProject(this._project.id, ProjectInputSourceState.BadLocation);
-            return;
+            return [];
         }
 
         let dataFile = path.join(root, pipelineInputJsonFile);
