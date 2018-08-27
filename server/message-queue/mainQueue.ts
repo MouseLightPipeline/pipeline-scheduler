@@ -20,7 +20,7 @@ export class MainQueue {
         return this.instance;
     }
 
-    public async Connect() {
+    public async connect() {
         return new Promise(async (resolve) => {
             return this.connectToQueue(resolve);
         });
@@ -36,19 +36,30 @@ export class MainQueue {
 
             this.channel = await this.connection.createChannel();
 
+            this.connection.on("error", (err) => {
+                this.channel = null;
+                debug("connection error - reconnect in 5 seconds");
+                debug(err);
+                setInterval(() => this.connect(), 5000);
+            });
+
             await this.channel.assertQueue(TaskExecutionUpdateQueue, {durable: true});
 
             await this.channel.prefetch(50);
 
             await this.channel.consume(TaskExecutionUpdateQueue, async (msg) => {
-                const taskExecution = JSON.parse(msg.content.toString());
-                const taskExecution2: IWorkerTaskExecutionAttributes = Object.assign({}, taskExecution, {
-                    submitted_at: new Date(taskExecution.submitted_at),
-                    started_at: new Date(taskExecution.started_at),
-                    completed_at: new Date(taskExecution.completed_at)
-                });
-                await this.handleOneMessage(taskExecution2);
-                this.channel.ack(msg);
+                try {
+                    const taskExecution = JSON.parse(msg.content.toString());
+                    const taskExecution2: IWorkerTaskExecutionAttributes = Object.assign({}, taskExecution, {
+                        submitted_at: new Date(taskExecution.submitted_at),
+                        started_at: new Date(taskExecution.started_at),
+                        completed_at: new Date(taskExecution.completed_at)
+                    });
+                    await this.handleOneMessage(taskExecution2);
+                    this.channel.ack(msg);
+                } catch (err) {
+                    debug(err);
+                }
             }, {noAck: false});
 
             debug(`main queue ready`);

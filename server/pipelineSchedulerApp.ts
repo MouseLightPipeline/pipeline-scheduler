@@ -15,7 +15,7 @@ async function start() {
 
     await SchedulerHub.Run(useChildProcessWorkers);
 
-    await MainQueue.Instance.Connect();
+    await MainQueue.Instance.connect();
 
     await MetricsConnector.Instance().initialize();
 
