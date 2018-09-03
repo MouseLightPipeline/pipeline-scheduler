@@ -36,7 +36,9 @@ export class MainQueue {
 
             this.channel = await this.connection.createChannel();
 
-            this.connection.on("error", (err) => {
+            this.connection.on("error", async (err) => {
+                await this.connection.close();
+                this.connection = null;
                 this.channel = null;
                 debug("connection error - reconnect in 5 seconds");
                 debug(err);
