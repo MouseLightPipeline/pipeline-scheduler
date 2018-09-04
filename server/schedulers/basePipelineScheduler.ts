@@ -183,6 +183,31 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         return toProcessInsert.length > 0;
     }
 
+    public async onTaskExecutionUpdate(executionInfo: IWorkerTaskExecutionAttributes): Promise<void> {
+        const localTaskExecution = await this._outputStageConnector.loadTaskExecution(executionInfo.remote_task_execution_id);
+
+        if (localTaskExecution == null || localTaskExecution.execution_status_code > ExecutionStatus.Running) {
+            // Don't update in the event this is processed after the completion message (separate queues).
+            // Also, could get an update before response from start is processed (no entry yet).
+            return;
+        }
+
+        const update = Object.assign({}, {
+            job_id: executionInfo.job_id,
+            job_name: executionInfo.job_name,
+            execution_status_code: executionInfo.execution_status_code,
+            last_process_status_code: executionInfo.last_process_status_code,
+            cpu_time_seconds: executionInfo.cpu_time_seconds,
+            max_cpu_percent: executionInfo.max_cpu_percent,
+            max_memory_mb: executionInfo.max_memory_mb,
+            submitted_at: executionInfo.submitted_at,
+            started_at: executionInfo.started_at
+        });
+
+        // TODO nothing stopping the async here and next method from having this complete after an update goes through.
+        await localTaskExecution.update(update);
+    }
+
     public async onTaskExecutionComplete(executionInfo: IWorkerTaskExecutionAttributes): Promise<void> {
         const localTaskExecution = await this._outputStageConnector.loadTaskExecution(executionInfo.remote_task_execution_id);
 

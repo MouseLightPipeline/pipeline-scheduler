@@ -52,6 +52,21 @@ export class MainQueue {
 
             await this.channel.prefetch(50);
 
+            await this.channel.consume(TaskExecutionCompleteQueue, async (msg) => {
+                try {
+                    const taskExecution = JSON.parse(msg.content.toString());
+                    const taskExecution2: IWorkerTaskExecutionAttributes = Object.assign({}, taskExecution, {
+                        submitted_at: new Date(taskExecution.submitted_at),
+                        started_at: new Date(taskExecution.started_at),
+                        completed_at: new Date(taskExecution.completed_at)
+                    });
+                    await this.handleOneCompleteMessage(taskExecution2);
+                    this.channel.ack(msg);
+                } catch (err) {
+                    debug(err);
+                }
+            }, {noAck: false});
+
             await this.channel.consume(TaskExecutionUpdateQueue, async (msg) => {
                 try {
                     const taskExecution = JSON.parse(msg.content.toString());
@@ -60,7 +75,7 @@ export class MainQueue {
                         started_at: new Date(taskExecution.started_at),
                         completed_at: new Date(taskExecution.completed_at)
                     });
-                    await this.handleOneMessage(taskExecution2);
+                    await this.handleOneUpdateMessage(taskExecution2);
                     this.channel.ack(msg);
                 } catch (err) {
                     debug(err);
@@ -79,24 +94,44 @@ export class MainQueue {
         }
     }
 
-    private async handleOneMessage(taskExecution: IWorkerTaskExecutionAttributes) {
+    private async handleOneCompleteMessage(taskExecution: IWorkerTaskExecutionAttributes) {
         return new Promise((resolve) => {
-            return this.acknowledgeMessage(taskExecution, resolve);
+            return this.acknowledgeCompleteMessage(taskExecution, resolve);
         });
     }
 
-    private async acknowledgeMessage(taskExecution: IWorkerTaskExecutionAttributes, resolve) {
+    private async acknowledgeCompleteMessage(taskExecution: IWorkerTaskExecutionAttributes, resolve) {
         debug("write metrics");
         await MetricsConnector.Instance().writeTaskExecution(taskExecution);
 
-        debug("acknowledge message");
+        debug("acknowledge complete message");
         const ack = await SchedulerHub.Instance.onTaskExecutionComplete(taskExecution);
 
         if (ack) {
             resolve();
             return true;
         } else {
-            setTimeout(() => this.acknowledgeMessage(taskExecution, resolve), 10 * 1000);
+            setTimeout(() => this.acknowledgeCompleteMessage(taskExecution, resolve), 10 * 1000);
+        }
+
+        return false;
+    }
+
+    private async handleOneUpdateMessage(taskExecution: IWorkerTaskExecutionAttributes) {
+        return new Promise((resolve) => {
+            return this.acknowledgeUpdateMessage(taskExecution, resolve);
+        });
+    }
+
+    private async acknowledgeUpdateMessage(taskExecution: IWorkerTaskExecutionAttributes, resolve) {
+        debug("acknowledge update message");
+        const ack = await SchedulerHub.Instance.onTaskExecutionUpdate(taskExecution);
+
+        if (ack) {
+            resolve();
+            return true;
+        } else {
+            setTimeout(() => this.acknowledgeUpdateMessage(taskExecution, resolve), 10 * 1000);
         }
 
         return false;

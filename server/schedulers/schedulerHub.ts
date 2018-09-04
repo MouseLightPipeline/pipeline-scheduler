@@ -17,6 +17,7 @@ export interface ISchedulerInterface {
     IsProcessingRequested: boolean;
 
     onTaskExecutionComplete(executionInfo: ITaskExecutionAttributes): Promise<void>;
+    onTaskExecutionUpdate(executionInfo: ITaskExecutionAttributes): Promise<void>;
 }
 
 export class SchedulerHub {
@@ -34,6 +35,30 @@ export class SchedulerHub {
 
     public static get Instance(): SchedulerHub {
         return this._instance;
+    }
+
+    public async onTaskExecutionUpdate(taskExecution: IWorkerTaskExecutionAttributes) {
+        if (taskExecution === null) {
+            console.log("null task execution");
+        }
+
+        if (taskExecution.execution_status_code === null) {
+            console.log("null execution_status_code");
+            console.log(taskExecution);
+        }
+
+        try {
+            const worker = this._pipelineStageWorkers.get(taskExecution.pipeline_stage_id);
+
+            if (worker) {
+                await worker.onTaskExecutionUpdate(taskExecution);
+                return true;
+            }
+        } catch (err) {
+            debug(err);
+        }
+
+        return false;
     }
 
     public async onTaskExecutionComplete(taskExecution: IWorkerTaskExecutionAttributes) {
