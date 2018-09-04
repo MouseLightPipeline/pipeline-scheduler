@@ -19,7 +19,7 @@ import {
 import {IProject} from "../data-model/sequelize/project";
 import {IPipelineWorker} from "../data-model/sequelize/pipelineWorker";
 import {ITaskDefinition} from "../data-model/sequelize/taskDefinition";
-import {ITaskExecution} from "../data-model/taskExecution";
+import {ITaskExecutionAttributes} from "../data-model/taskExecution";
 
 interface IMuxUpdateLists extends IMuxTileLists {
     toInsertAdjacentMapIndex: IAdjacentTileAttributes[];
@@ -40,7 +40,7 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
         return this.OutputStageConnector.loadAdjacentTile(tile.relative_path);
     }
 
-    protected mapTaskArgumentParameter(value: string, task: ITaskDefinition, taskExecution: ITaskExecution, worker: IPipelineWorker, tile: IPipelineTileAttributes, context: IAdjacentTile): string {
+    protected mapTaskArgumentParameter(value: string, task: ITaskDefinition, taskExecution: ITaskExecutionAttributes, worker: IPipelineWorker, tile: IPipelineTileAttributes, context: IAdjacentTile): string {
         if (context !== null) {
             switch (value.toUpperCase()) {
                 case "ADJACENT_TILE_RELATIVE_PATH":

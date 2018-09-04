@@ -13,6 +13,7 @@ import {
 } from "../data-access/sequelize/project-connectors/stageTableConnector";
 import {BasePipelineScheduler, DefaultPipelineIdKey, TilePipelineStatus} from "./basePipelineScheduler";
 import {ProjectDatabaseConnector} from "../data-access/sequelize/project-connectors/projectDatabaseConnector";
+import {createTaskExecutionWithInput, ITaskExecutionAttributes} from "../data-model/taskExecution";
 
 const MAX_KNOWN_INPUT_SKIP_COUNT = 1;
 const MAX_ASSIGN_PER_ITERATION = 50;
@@ -147,7 +148,7 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
 
                     const logFile = path.join(log_root_path, pipelineTile.relative_path, ".log", `${task.log_prefix}-${pipelineTile.tile_name}`);
 
-                    let taskExecution = await this._outputStageConnector.createTaskExecution(worker, task, {
+                    let taskExecutionInput: ITaskExecutionAttributes = await createTaskExecutionWithInput(worker, task, {
                         pipelineStageId: this._pipelineStage.id,
                         tileId: pipelineTile.relative_path,
                         outputPath,
@@ -158,15 +159,27 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
 
                     const context = await this.getTaskContext(pipelineTile);
 
-                    args = args.concat(this.mapTaskArguments(task, taskExecution, worker, pipelineTile, context));
+                    args = args.concat(this.mapTaskArguments(task, taskExecutionInput, worker, pipelineTile, context));
 
-                    await taskExecution.update({resolved_script_args: JSON.stringify(args)});
+                    taskExecutionInput.resolved_script_args = JSON.stringify(args);
 
-                    let startTaskResponse = await PipelineWorkerClient.Instance().startTaskExecution(worker, taskExecution.get({plain: true}));
+                    let startTaskResponse = await PipelineWorkerClient.Instance().startTaskExecution(worker, taskExecutionInput);
 
                     if (startTaskResponse != null && startTaskResponse.taskExecution != null) {
                         const responseExecution = startTaskResponse.taskExecution;
                         const now = new Date();
+
+                        let taskExecution = await this._outputStageConnector.createTaskExecution(Object.assign(taskExecutionInput, {
+                            worker_task_execution_id: responseExecution.id,
+                            queue_type: responseExecution.queue_type,
+                            resolved_script_args: responseExecution.resolved_script_args, // Worker may have substituted, e.g., IS_CLUSTER_JOB
+                            local_work_units: responseExecution.local_work_units,
+                            cluster_work_units: responseExecution.cluster_work_units,
+                            submitted_at: responseExecution.submitted_at,
+                            started_at: responseExecution.started_at,
+                            completed_at: responseExecution.completed_at
+                        }));
+
 
                         await this._outputStageConnector.insertInProcessTile({
                             relative_path: pipelineTile.relative_path,
@@ -176,17 +189,6 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
                             worker_task_execution_id: responseExecution.id,
                             created_at: now,
                             updated_at: now
-                        });
-
-                        await taskExecution.update({
-                            worker_task_execution_id: responseExecution.id,
-                            queue_type: responseExecution.queue_type,
-                            resolved_script_args: responseExecution.resolved_script_args, // Worker may have substituted, e.g., IS_CLUSTER_JOB
-                            local_work_units: responseExecution.local_work_units,
-                            cluster_work_units: responseExecution.cluster_work_units,
-                            submitted_at: responseExecution.submitted_at,
-                            started_at: responseExecution.started_at,
-                            completed_at: responseExecution.completed_at
                         });
 
                         pipelineTile.this_stage_status = TilePipelineStatus.Processing;

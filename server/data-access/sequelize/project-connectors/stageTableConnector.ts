@@ -5,7 +5,7 @@ const debug = require("debug")("pipeline:scheduler:stage-database-connector");
 import {TilePipelineStatus} from "../../../schedulers/basePipelineScheduler";
 import {
     augmentTaskExecutionModel,
-    createTaskExecutionTable, IStartTaskInput, ITaskExecution,
+    createTaskExecutionTable, IStartTaskInput, ITaskExecution, ITaskExecutionAttributes,
     ITaskExecutionModel
 } from "../../../data-model/taskExecution";
 import {IPipelineWorker} from "../../../data-model/sequelize/pipelineWorker";
@@ -241,8 +241,8 @@ export class StageTableConnector {
 
     // -----------------------------------------------------------------------------------------------------------------
 
-    public async createTaskExecution(worker: IPipelineWorker, taskDefinition: ITaskDefinition, startTaskInput: IStartTaskInput): Promise<ITaskExecution> {
-        return this._taskExecutionTable.createTaskExecution(worker, taskDefinition, startTaskInput);
+    public async createTaskExecution(task: ITaskExecutionAttributes): Promise<ITaskExecution> {
+        return this._taskExecutionTable.create(task);
     };
 
     // -----------------------------------------------------------------------------------------------------------------

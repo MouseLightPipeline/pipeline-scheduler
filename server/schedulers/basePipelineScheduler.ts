@@ -8,7 +8,7 @@ import {IProject} from "../data-model/sequelize/project";
 import {
     CompletionResult,
     ExecutionStatus,
-    ITaskExecution,
+    ITaskExecutionAttributes,
     IWorkerTaskExecutionAttributes
 } from "../data-model/taskExecution";
 import {
@@ -237,7 +237,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         return null;
     }
 
-    protected mapTaskArgumentParameter(value: string, task: ITaskDefinition, taskExecution: ITaskExecution, worker: IPipelineWorker, tile: IPipelineTileAttributes, context: any): string {
+    protected mapTaskArgumentParameter(value: string, task: ITaskDefinition, taskExecution: ITaskExecutionAttributes, worker: IPipelineWorker, tile: IPipelineTileAttributes, context: any): string {
         let result = value;
 
         switch (result.toUpperCase()) {
@@ -270,7 +270,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         return result;
     }
 
-    protected mapTaskArguments(task: ITaskDefinition, taskExecution: ITaskExecution, worker: IPipelineWorker, tile: IPipelineTileAttributes, context: any): string[] {
+    protected mapTaskArguments(task: ITaskDefinition, taskExecution: ITaskExecutionAttributes, worker: IPipelineWorker, tile: IPipelineTileAttributes, context: any): string[] {
         const scriptsArgs: ITaskArgument[] = task.user_arguments;
 
         return scriptsArgs.map(arg => {
@@ -335,7 +335,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
 
     protected async performWork() {
         if (this.IsExitRequested) {
-            debug(`{this._source.name}: cancel requested - exiting stage worker`);
+            debug(`${this._source.name}: cancel requested - exiting stage worker`);
             return;
         }
 

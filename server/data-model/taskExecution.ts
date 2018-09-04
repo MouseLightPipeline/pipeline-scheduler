@@ -1,4 +1,5 @@
 import {FindOptions, Instance, Model, Sequelize} from "sequelize";
+import * as uuid from "uuid";
 
 import {isNullOrUndefined} from "util";
 import {IPipelineWorker} from "./sequelize/pipelineWorker";
@@ -210,16 +211,17 @@ export function augmentTaskExecutionModel(Model: ITaskExecutionModel) {
         return Model.findAll(options);
     };
 
-
+/*
     Model.createTaskExecution = async function (worker: IPipelineWorker, taskDefinition: ITaskDefinition, startTaskInput: IStartTaskInput): Promise<ITaskExecution> {
         let taskExecution = await createTaskExecutionWithInput(worker, taskDefinition, startTaskInput);
 
         return this.create(taskExecution);
-    };
+    };*/
 }
 
-async function createTaskExecutionWithInput(worker: IPipelineWorker, taskDefinition: ITaskDefinition, startTaskInput: IStartTaskInput): Promise<ITaskExecutionAttributes> {
+export async function createTaskExecutionWithInput(worker: IPipelineWorker, taskDefinition: ITaskDefinition, startTaskInput: IStartTaskInput): Promise<ITaskExecutionAttributes> {
     return {
+        id: uuid.v4(),
         worker_id: worker.id,
         worker_task_execution_id: null,
         task_definition_id: taskDefinition.id,
