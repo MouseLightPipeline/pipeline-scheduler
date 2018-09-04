@@ -8,6 +8,7 @@ import {MetricsConnector} from "../data-access/metrics/metricsConnector";
 
 const debug = require("debug")("pipeline:main-queue");
 
+const TaskExecutionCompleteQueue = "TaskExecutionCompleteQueue";
 const TaskExecutionUpdateQueue = "TaskExecutionUpdateQueue";
 
 export class MainQueue {
@@ -45,7 +46,9 @@ export class MainQueue {
                 setInterval(() => this.connect(), 5000);
             });
 
-            await this.channel.assertQueue(TaskExecutionUpdateQueue, {durable: true});
+            await this.channel.assertQueue(TaskExecutionCompleteQueue, {durable: true});
+
+            await this.channel.assertQueue(TaskExecutionUpdateQueue, {durable: false});
 
             await this.channel.prefetch(50);
 
