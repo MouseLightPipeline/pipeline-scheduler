@@ -2,8 +2,8 @@
 
 logName=$(date '+%Y-%m-%d_%H-%M-%S');
 
-export DEBUG=pipeline*
-
 mkdir -p /var/log/pipeline
+
+export DEBUG=pipeline*
 
 node pipelineSchedulerApp.js &> /var/log/pipeline/scheduler-${logName}.log
