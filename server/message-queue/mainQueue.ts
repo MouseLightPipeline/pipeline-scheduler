@@ -61,6 +61,8 @@ export class MainQueue {
                         completed_at: new Date(taskExecution.completed_at)
                     });
                     await this.handleOneCompleteMessage(taskExecution2);
+
+                    debug("sending channel ack");
                     this.channel.ack(msg);
                 } catch (err) {
                     debug(err);
@@ -101,16 +103,19 @@ export class MainQueue {
     }
 
     private async acknowledgeCompleteMessage(taskExecution: IWorkerTaskExecutionAttributes, resolve) {
-        debug("write metrics");
-        await MetricsConnector.Instance().writeTaskExecution(taskExecution);
-
-        debug("acknowledge complete message");
         const ack = await SchedulerHub.Instance.onTaskExecutionComplete(taskExecution);
 
         if (ack) {
+            debug("write metrics");
+            await MetricsConnector.Instance().writeTaskExecution(taskExecution);
+
+            debug("handle complete message done");
+
             resolve();
+
             return true;
         } else {
+            debug(`failed to acknowledge complete message for execution ${taskExecution.remote_task_execution_id}`);
             setTimeout(() => this.acknowledgeCompleteMessage(taskExecution, resolve), 10 * 1000);
         }
 

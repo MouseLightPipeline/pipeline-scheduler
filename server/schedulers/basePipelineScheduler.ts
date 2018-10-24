@@ -211,6 +211,21 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
     public async onTaskExecutionComplete(executionInfo: IWorkerTaskExecutionAttributes): Promise<void> {
         const localTaskExecution = await this._outputStageConnector.loadTaskExecution(executionInfo.remote_task_execution_id);
 
+        if (localTaskExecution == null) {
+            // TODO Something went wrong here.  There is no record of this task execution.  Reset the tile, if it is
+            // considered running by the scheduler.
+            const tile = await this._outputStageConnector.loadTileById(executionInfo.tile_id);
+
+            if (tile !== null && tile.this_stage_status === TilePipelineStatus.Processing) {
+                await this._outputStageConnector.updateTileStatus(executionInfo.tile_id, TilePipelineStatus.Incomplete);
+            }
+
+            // Remove from in process if there.
+            await this._outputStageConnector.deleteInProcess([executionInfo.tile_id]);
+
+            return;
+        }
+
         const update = Object.assign({}, {
             job_id: executionInfo.job_id,
             job_name: executionInfo.job_name,

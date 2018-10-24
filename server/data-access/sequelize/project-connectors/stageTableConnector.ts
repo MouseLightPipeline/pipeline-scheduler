@@ -125,6 +125,10 @@ export class StageTableConnector {
         return this._tileTable.findOne({where});
     }
 
+    public async loadTileById(id: string): Promise<IPipelineTile> {
+        return this._tileTable.findOne({where: {relative_path: id}});
+    }
+
     public async loadUnscheduled(): Promise<IPipelineTile[]> {
         return this._tileTable.findAll({
             where: {
@@ -192,7 +196,10 @@ export class StageTableConnector {
 
     public async updateTileStatus(relative_path: string, status: TilePipelineStatus) {
         const tile = await this.loadTile({relative_path: relative_path});
-        await tile.update({this_stage_status: status});
+
+        if (tile) {
+            await tile.update({this_stage_status: status});
+        }
     }
 
     public async deleteTiles(toDelete: string[]) {
