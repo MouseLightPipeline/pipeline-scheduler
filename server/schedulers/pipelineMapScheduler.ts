@@ -68,7 +68,7 @@ export class PipelineMapScheduler extends StagePipelineScheduler {
                 return null;
             }
 
-            if (existingTile.prev_stage_status !== inputTile.this_stage_status) {
+            if (existingTile.prev_stage_status !== inputTile.this_stage_status || existingTile.lat_z !== inputTile.lat_z || existingTile.step_z !== inputTile.step_z) {
                 if (existingTile.this_stage_status === TilePipelineStatus.Queued && inputTile.this_stage_status !== TilePipelineStatus.Complete) {
                     sorted.toReset.push(existingTile);
                 }

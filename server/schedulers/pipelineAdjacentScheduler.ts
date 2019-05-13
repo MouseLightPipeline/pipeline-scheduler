@@ -222,7 +222,7 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
                 this_status = existingOutput.this_stage_status;
             }
 
-            if (existingOutput.prev_stage_status !== prev_status || existingOutput.this_stage_status !== this_status) {
+            if (existingOutput.prev_stage_status !== prev_status || existingOutput.this_stage_status !== this_status || existingOutput.lat_z !== inputTile.lat_z || existingOutput.step_z !== inputTile.step_z) {
                 if (existingOutput.this_stage_status === TilePipelineStatus.Queued && inputTile.this_stage_status !== TilePipelineStatus.Complete) {
                     muxUpdateLists.toReset.push(existingOutput);
                 }
