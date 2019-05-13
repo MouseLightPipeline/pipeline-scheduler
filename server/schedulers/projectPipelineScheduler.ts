@@ -87,7 +87,7 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
         };
 
         if (knownOutput.length - knownInput.length > 1000) {
-            debug(`input has greater than 1000 fewer tiles than last check (${knownOutput.length - knownInput.length}) - skipping update`);
+            debug(`input more than one thousand fewer tiles than last check (${knownOutput.length - knownInput.length}) - skipping update`);
             return;
         }
 
@@ -123,7 +123,7 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
                 return null;
             }
 
-            if (existingTile.prev_stage_status !== inputTile.this_stage_status) {
+            if (!tileEqual(existingTile, inputTile)) {
                 existingTile.tile_name = inputTile.tile_name;
                 existingTile.index = inputTile.index;
                 existingTile.prev_stage_status = inputTile.prev_stage_status;
@@ -303,4 +303,9 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
 
         return [projectUpdate, tiles];
     }
+}
+
+function tileEqual(a: IPipelineTileAttributes, b: IPipelineTileAttributes)
+{
+    return a.prev_stage_status === b.this_stage_status && a.lat_z === b.lat_z && a.step_z === b.step_z;
 }
