@@ -11,7 +11,7 @@
     "devel": "DEBUG=pipeline* node $NODE_DEBUG_OPTION --trace-warnings server/pipelineSchedulerApp.js",
     "start": "node server/pipelineSchedulerApp.js",
     "docker-build": "gulp docker-build",
-    "release": "gulp release"
+    "docker-release": "gulp release"
   },
   "jest": {
     "transform": {
