@@ -27,7 +27,7 @@ async function start() {
 
     app.get("/healthcheck", (req, res) =>{
         res.sendStatus(200);
-    })
+    });
 
     app.listen(ServiceOptions.port, () => {
         debug(`running on http://localhost:${ServiceOptions.port}`);
