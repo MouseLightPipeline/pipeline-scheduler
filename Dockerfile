@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY dist .
 
-RUN yarn install
+RUN yarn --production install
 
 RUN groupadd -g 1097 mousebrainmicro
 RUN adduser -u 7700649 --disabled-password --gecos '' mluser

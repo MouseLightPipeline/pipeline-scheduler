@@ -1,6 +1,10 @@
-import ApolloClient, {createNetworkInterface} from "apollo-client";
-import gql from "graphql-tag";
-import "isomorphic-fetch";
+import {HttpLink} from "apollo-link-http";
+import {ApolloClient} from "apollo-client";
+import {InMemoryCache} from "apollo-cache-inmemory";
+
+const gql = require("graphql-tag");
+
+require("isomorphic-fetch");
 
 import {ApiServerOptions} from "../options/coreServicesOptions";
 import {IProjectInput, ProjectInputSourceState} from "../data-model/sequelize/project";
@@ -19,9 +23,9 @@ export class PipelineApiClient {
         return PipelineApiClient._instance;
     }
 
-    private _client: ApolloClient = null;
+    private _client: any = null;
 
-    private get Client(): ApolloClient {
+    private get Client(): any {
         let uri = null;
 
         if (this._client == null) {
@@ -29,10 +33,10 @@ export class PipelineApiClient {
                 uri = `http://${ApiServerOptions.host}:${ApiServerOptions.port}/graphql`;
 
                 debug(`creating apollo client with uri ${uri}`);
-                const networkInterface = createNetworkInterface({uri});
 
                 this._client = new ApolloClient({
-                    networkInterface
+                    link: new HttpLink({uri}),
+                    cache: new InMemoryCache()
                 });
             } catch (err) {
                 debug(`failed to create apollo api client with uri ${uri}`);

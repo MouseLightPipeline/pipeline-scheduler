@@ -1,3 +1,4 @@
+import * as os from "os";
 import * as express from "express";
 import * as bodyParser from "body-parser";
 
@@ -11,13 +12,13 @@ import {MainQueue} from "./message-queue/mainQueue";
 start().then().catch((err) => debug(err));
 
 async function start() {
-    const useChildProcessWorkers = (parseInt(process.env.USE_CHILD_PROCESS_WORKERS) === 1) || false;
-
-    await SchedulerHub.Run(useChildProcessWorkers);
-
     await MainQueue.Instance.connect();
 
     await MetricsConnector.Instance().initialize();
+
+    const useChildProcessWorkers = (parseInt(process.env.USE_CHILD_PROCESS_WORKERS) === 1) || false;
+
+    await SchedulerHub.Run(useChildProcessWorkers);
 
     const app = express();
 
@@ -30,6 +31,6 @@ async function start() {
     });
 
     app.listen(ServiceOptions.port, () => {
-        debug(`running on http://localhost:${ServiceOptions.port}`);
+        debug(`pipeline scheduler running at http://${os.hostname()}:${ServiceOptions.port}`);
     });
 }

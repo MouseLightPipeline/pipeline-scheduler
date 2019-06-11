@@ -1,6 +1,10 @@
-import ApolloClient, {createNetworkInterface} from "apollo-client";
-import gql from "graphql-tag";
-import "isomorphic-fetch";
+import {HttpLink} from "apollo-link-http";
+import {ApolloClient} from "apollo-client";
+import {InMemoryCache} from "apollo-cache-inmemory";
+
+const gql = require("graphql-tag");
+
+require("isomorphic-fetch");
 
 const debug = require("debug")("pipeline:scheduler:pipeline-worker-client");
 
@@ -33,9 +37,9 @@ export class PipelineWorkerClient {
         return PipelineWorkerClient._instance;
     }
 
-    private _idClientMap = new Map<string, ApolloClient>();
+    private _idClientMap = new Map<string, any>();
 
-    private getClient(worker: IPipelineWorker): ApolloClient {
+    private getClient(worker: IPipelineWorker): any {
         if (worker === null) {
             return null;
         }
@@ -49,10 +53,10 @@ export class PipelineWorkerClient {
                 uri = `http://${worker.address}:${worker.port}/graphql`;
 
                 debug(`creating apollo client with uri ${uri}`);
-                const networkInterface = createNetworkInterface({uri});
 
-                client = new ApolloClient({
-                    networkInterface
+                const client = new ApolloClient({
+                    link: new HttpLink({uri}),
+                    cache: new InMemoryCache()
                 });
 
                 this._idClientMap[worker.id] = client;
