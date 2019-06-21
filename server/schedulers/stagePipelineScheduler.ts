@@ -13,7 +13,7 @@ import {
 } from "../data-access/sequelize/project-connectors/stageTableConnector";
 import {BasePipelineScheduler, DefaultPipelineIdKey, TilePipelineStatus} from "./basePipelineScheduler";
 import {ProjectDatabaseConnector} from "../data-access/sequelize/project-connectors/projectDatabaseConnector";
-import {createTaskExecutionWithInput, ITaskExecutionAttributes} from "../data-model/taskExecution";
+import {createTaskExecutionWithInput, ExecutionStatus, ITaskExecutionAttributes} from "../data-model/taskExecution";
 
 const MAX_KNOWN_INPUT_SKIP_COUNT = 1;
 const MAX_ASSIGN_PER_ITERATION = 50;
@@ -169,35 +169,44 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
                         const responseExecution = startTaskResponse.taskExecution;
                         const now = new Date();
 
-                        let taskExecution = await this._outputStageConnector.createTaskExecution(Object.assign(taskExecutionInput, {
-                            worker_task_execution_id: responseExecution.id,
-                            queue_type: responseExecution.queue_type,
-                            resolved_script_args: responseExecution.resolved_script_args, // Worker may have substituted, e.g., IS_CLUSTER_JOB
-                            local_work_units: responseExecution.local_work_units,
-                            cluster_work_units: responseExecution.cluster_work_units,
-                            submitted_at: responseExecution.submitted_at,
-                            started_at: responseExecution.started_at,
-                            completed_at: responseExecution.completed_at
-                        }));
+                        if (startTaskResponse.taskExecution.execution_status_code === ExecutionStatus.Completed) {
+                            // Failed immediately - do not put in inProcess table or list as processing.  Expecting
+                            // a complete message in message queue that has likely already arrived.
+                            pipelineTile.this_stage_status = TilePipelineStatus.Failed;
 
+                            await pipelineTile.save();
 
-                        await this._outputStageConnector.insertInProcessTile({
-                            relative_path: pipelineTile.relative_path,
-                            worker_id: worker.id,
-                            worker_last_seen: now,
-                            task_execution_id: taskExecution.id,
-                            worker_task_execution_id: responseExecution.id,
-                            created_at: now,
-                            updated_at: now
-                        });
+                            debug(`${this._source.name}: returned failed task start from worker ${worker.name}`);
+                        } else {
+                            let taskExecution = await this._outputStageConnector.createTaskExecution(Object.assign(taskExecutionInput, {
+                                worker_task_execution_id: responseExecution.id,
+                                queue_type: responseExecution.queue_type,
+                                resolved_script_args: responseExecution.resolved_script_args, // Worker may have substituted, e.g., IS_CLUSTER_JOB
+                                local_work_units: responseExecution.local_work_units,
+                                cluster_work_units: responseExecution.cluster_work_units,
+                                submitted_at: responseExecution.submitted_at,
+                                started_at: responseExecution.started_at,
+                                completed_at: responseExecution.completed_at
+                            }));
 
-                        pipelineTile.this_stage_status = TilePipelineStatus.Processing;
+                            await this._outputStageConnector.insertInProcessTile({
+                                relative_path: pipelineTile.relative_path,
+                                worker_id: worker.id,
+                                worker_last_seen: now,
+                                task_execution_id: taskExecution.id,
+                                worker_task_execution_id: responseExecution.id,
+                                created_at: now,
+                                updated_at: now
+                            });
 
-                        await pipelineTile.save();
+                            pipelineTile.this_stage_status = TilePipelineStatus.Processing;
 
-                        await this._outputStageConnector.deleteToProcessTile(toProcessTile);
+                            await pipelineTile.save();
 
-                        debug(`${this._source.name}: started task on worker ${worker.name} with execution id ${taskExecution.id}`);
+                            await this._outputStageConnector.deleteToProcessTile(toProcessTile);
+
+                            debug(`${this._source.name}: started task on worker ${worker.name} with execution id ${taskExecution.id}`);
+                        }
 
                         return true;
                     } else {

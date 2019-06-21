@@ -52,7 +52,7 @@ export class PipelineWorkerClient {
             try {
                 uri = `http://${worker.address}:${worker.port}/graphql`;
 
-                debug(`creating apollo client with uri ${uri}`);
+                debug(`creating apollo client with uri ${uri} for ${worker.id}`);
 
                 const client = new ApolloClient({
                     link: new HttpLink({uri}),
@@ -114,8 +114,8 @@ export class PipelineWorkerClient {
     public async queryWorker(worker: IPipelineWorker): Promise<IClientWorker> {
         const client = this.getClient(worker);
 
-        if (client === null) {
-            debug("Could not connect to worker");
+        if (client === null || client === undefined) {
+            debug(`could not retrieve client for worker ${worker.id}`);
             return {id: worker.id, local_task_load: -1, cluster_task_load: -1};
         }
 
@@ -138,6 +138,7 @@ export class PipelineWorkerClient {
             await PipelineWorkerClient.markWorkerUnavailable(worker);
             this._idClientMap.delete(worker.id);
             debug(`error requesting worker update ${worker.name}`);
+            debug(err);
 
             return {id: worker.id, local_task_load: -1, cluster_task_load: -1};
         }

@@ -212,8 +212,10 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         const localTaskExecution = await this._outputStageConnector.loadTaskExecution(executionInfo.remote_task_execution_id);
 
         if (localTaskExecution == null) {
-            // TODO Something went wrong here.  There is no record of this task execution.  Reset the tile, if it is
-            // considered running by the scheduler.
+            // There is no record of this task execution - two possibilities:
+            // 1) It is considered running by the scheduler - something went wrong, reset the tile.
+            // 2) It never started because the worker errored trying to start - an execution was never stored because
+            //    there was a good chance this message would come before it was even added.
             const tile = await this._outputStageConnector.loadTileById(executionInfo.tile_id);
 
             if (tile !== null && tile.this_stage_status === TilePipelineStatus.Processing) {
