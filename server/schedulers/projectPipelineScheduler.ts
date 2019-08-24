@@ -305,7 +305,6 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
     }
 }
 
-function tileEqual(a: IPipelineTileAttributes, b: IPipelineTileAttributes)
-{
+function tileEqual(a: IPipelineTileAttributes, b: IPipelineTileAttributes) {
     return a.prev_stage_status === b.this_stage_status && a.lat_z === b.lat_z && a.step_z === b.step_z;
 }
