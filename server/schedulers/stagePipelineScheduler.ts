@@ -80,8 +80,6 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
     }
 
     protected async performProcessing(): Promise<void> {
-        let pipelineStages = PersistentStorageManager.Instance().PipelineStages;
-
         let allWorkers = await PersistentStorageManager.Instance().getPipelineWorkers();
 
         let workers = allWorkers.filter(worker => worker.is_in_scheduler_pool);
@@ -91,7 +89,11 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
             return;
         }
 
-        let src_path = this._project.root_path;
+        let project: IProject = await PersistentStorageManager.Instance().Projects.findById(this._project.id);
+
+        let pipelineStages = PersistentStorageManager.Instance().PipelineStages;
+
+        let src_path = project.root_path;
 
         if (this._pipelineStage.previous_stage_id) {
             let previousStage: IPipelineStage = await pipelineStages.findById(this._pipelineStage.previous_stage_id);
@@ -144,7 +146,7 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
 
                     let outputPath = path.join(this._pipelineStage.dst_path, pipelineTile.relative_path);
 
-                    const log_root_path = this._project.log_root_path || this._pipelineStage.dst_path || `/tmp/${this._pipelineStage.id}`;
+                    const log_root_path = project.log_root_path || this._pipelineStage.dst_path || `/tmp/${this._pipelineStage.id}`;
 
                     const logFile = path.join(log_root_path, pipelineTile.relative_path, ".log", `${task.log_prefix}-${pipelineTile.tile_name}`);
 
@@ -159,7 +161,7 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
 
                     const context = await this.getTaskContext(pipelineTile);
 
-                    args = args.concat(this.mapTaskArguments(task, taskExecutionInput, worker, pipelineTile, context));
+                    args = args.concat(this.mapTaskArguments(project, task, taskExecutionInput, worker, pipelineTile, context));
 
                     taskExecutionInput.resolved_script_args = JSON.stringify(args);
 

@@ -40,17 +40,17 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
         return this.OutputStageConnector.loadAdjacentTile(tile.relative_path);
     }
 
-    protected mapTaskArgumentParameter(value: string, task: ITaskDefinition, taskExecution: ITaskExecutionAttributes, worker: IPipelineWorker, tile: IPipelineTileAttributes, context: IAdjacentTile): string {
+    protected mapTaskArgumentParameter(valueLowerCase: string, task: ITaskDefinition, taskExecution: ITaskExecutionAttributes, worker: IPipelineWorker, tile: IPipelineTileAttributes, context: IAdjacentTile): string {
         if (context !== null) {
-            switch (value.toUpperCase()) {
-                case "ADJACENT_TILE_RELATIVE_PATH":
+            switch (valueLowerCase) {
+                case "adjacent_tile_relative_path":
                     return context.adjacent_relative_path;
-                case "ADJACENT_TILE_NAME":
+                case "adjacent_tile_name":
                     return context.adjacent_tile_name;
             }
         }
 
-        return super.mapTaskArgumentParameter(value, task, taskExecution, worker, tile, context);
+        return super.mapTaskArgumentParameter(valueLowerCase, task, taskExecution, worker, tile, context);
     }
 
     private async findPreviousLayerTile(inputTile: IPipelineTileAttributes): Promise<IPipelineTile> {

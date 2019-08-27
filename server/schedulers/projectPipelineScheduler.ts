@@ -221,13 +221,21 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
     private async parsePipelineDefaultInput(jsonContent: any, projectUpdate: IProjectAttributes): Promise<[IProjectAttributes, IPipelineTileAttributes[]]> {
         let tiles: IPipelineTileAttributes[] = [];
 
-        if (jsonContent.extents) {
+        if (jsonContent.extents != null) {
             projectUpdate.sample_x_min = jsonContent.extents.minimumX;
             projectUpdate.sample_x_max = jsonContent.extents.maximumX;
             projectUpdate.sample_y_min = jsonContent.extents.minimumY;
             projectUpdate.sample_y_max = jsonContent.extents.maximumY;
             projectUpdate.sample_z_min = jsonContent.extents.minimumZ;
             projectUpdate.sample_z_max = jsonContent.extents.maximumZ;
+
+            await this._project.update(projectUpdate);
+
+            this._project = await PersistentStorageManager.Instance().Projects.findById(this._project.id);
+        }
+
+        if (jsonContent.projectInfo != null && jsonContent.projectInfo.customParameters != null) {
+            projectUpdate.user_parameters = JSON.stringify(jsonContent.projectInfo.customParameters);
 
             await this._project.update(projectUpdate);
 

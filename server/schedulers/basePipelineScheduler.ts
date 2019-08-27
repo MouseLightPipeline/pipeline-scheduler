@@ -1,4 +1,3 @@
-import {isNullOrUndefined} from "util";
 import * as _ from "lodash";
 
 const debug = require("debug")("pipeline:scheduler:base-pipeline-scheduler");
@@ -125,27 +124,27 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
             let alreadyInToProcessTable = _.intersectionBy(unscheduled, waitingToProcess, "relative_path");
 
             let toSchedule = notAlreadyInToProcessTable.filter(tile => {
-                if (!isNullOrUndefined(this._project.region_x_min) && tile.lat_x < this._project.region_x_min) {
+                if (this._project.region_x_min != null && tile.lat_x < this._project.region_x_min) {
                     return false;
                 }
 
-                if (!isNullOrUndefined(this._project.region_x_max) && tile.lat_x > this._project.region_x_max) {
+                if (this._project.region_x_max != null && tile.lat_x > this._project.region_x_max) {
                     return false;
                 }
 
-                if (!isNullOrUndefined(this._project.region_y_min) && tile.lat_y < this._project.region_y_min) {
+                if (this._project.region_y_min != null && tile.lat_y < this._project.region_y_min) {
                     return false;
                 }
 
-                if (!isNullOrUndefined(this._project.region_y_max) && tile.lat_y > this._project.region_y_max) {
+                if (this._project.region_y_max != null && tile.lat_y > this._project.region_y_max) {
                     return false;
                 }
 
-                if (!isNullOrUndefined(this._project.region_z_min) && tile.lat_z < this._project.region_z_min) {
+                if (this._project.region_z_min != null && tile.lat_z < this._project.region_z_min) {
                     return false;
                 }
 
-                return !(!isNullOrUndefined(this._project.region_z_max) && tile.lat_z > this._project.region_z_max);
+                return !(this._project.region_z_max != null && tile.lat_z > this._project.region_z_max);
             });
 
             if (initialLength !== toSchedule.length) {
@@ -279,56 +278,71 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         return null;
     }
 
-    protected mapTaskArgumentParameter(value: string, task: ITaskDefinition, taskExecution: ITaskExecutionAttributes, worker: IPipelineWorker, tile: IPipelineTileAttributes, context: any): string {
-        let result = value;
+    private static  mapUserParameter(valueLowerCase: string, userParameters: Map<string, string>): string {
+        return userParameters.has(valueLowerCase) ? userParameters.get(valueLowerCase) : null;
+    }
 
-        switch (result.toUpperCase()) {
-            case "PROJECT_NAME":
+    protected mapTaskArgumentParameter(valueLowerCase: string, task: ITaskDefinition, taskExecution: ITaskExecutionAttributes, worker: IPipelineWorker, tile: IPipelineTileAttributes, context: any): string {
+        switch (valueLowerCase) {
+            case "project_name":
                 return this._project.name;
-            case "PROJECT_ROOT":
+            case "project_root":
                 return this._project.root_path;
-            case "LOG_FILE":
+            case "log_file":
                 return taskExecution.resolved_log_path;
-            case "X":
-                return isNullOrUndefined(tile.lat_x) ? value : tile.lat_x.toString();
-            case "Y":
-                return isNullOrUndefined(tile.lat_y) ? value : tile.lat_y.toString();
-            case "Z":
-                return isNullOrUndefined(tile.lat_z) ? value : tile.lat_z.toString();
-            case "STEP_X":
-                return isNullOrUndefined(tile.step_x) ? value : tile.step_x.toString();
-            case "STEP_Y":
-                return isNullOrUndefined(tile.step_y) ? value : tile.step_y.toString();
-            case "STEP_Z":
-                return isNullOrUndefined(tile.step_z) ? value : tile.step_z.toString();
-            case "EXPECTED_EXIT_CODE":
-                return isNullOrUndefined(task.expected_exit_code) ? value : task.expected_exit_code.toString();
-            case "IS_CLUSTER_JOB":
-                return "IS_CLUSTER_JOB"; // Will be filled in by the worker
-            case "TASK_ID":
+            case "x":
+                return tile.lat_x == null ? null : tile.lat_x.toString();
+            case "y":
+                return tile.lat_y == null ? null : tile.lat_y.toString();
+            case "z":
+                return tile.lat_z == null ? null : tile.lat_z.toString();
+            case "step_x":
+                return tile.step_x == null ? null : tile.step_x.toString();
+            case "step_y":
+                return tile.step_y == null ? null : tile.step_y.toString();
+            case "step_z":
+                return tile.step_z == null ? null : tile.step_z.toString();
+            case "expected_exit_code":
+                return task.expected_exit_code ? null : task.expected_exit_code.toString();
+            case "is_cluster_job":
+                return "is_cluster_job"; // Will be filled in by the worker
+            case "task_id":
                 return taskExecution.id;
         }
 
-        return result;
+        return null;
     }
 
-    protected mapTaskArguments(task: ITaskDefinition, taskExecution: ITaskExecutionAttributes, worker: IPipelineWorker, tile: IPipelineTileAttributes, context: any): string[] {
+    protected mapTaskArguments(project: IProject, task: ITaskDefinition, taskExecution: ITaskExecutionAttributes, worker: IPipelineWorker, tile: IPipelineTileAttributes, context: any): string[] {
         const scriptsArgs: ITaskArgument[] = task.user_arguments;
+
+        if (scriptsArgs.length === 0) {
+            return [];
+        }
+
+        const userParameters = new Map<string, string>();
+
+        const userParametersObj = JSON.parse(project.user_parameters);
+
+        Object.keys(userParametersObj).forEach(prop => userParameters.set(prop.toLowerCase(), userParametersObj[prop]));
 
         return scriptsArgs.map(arg => {
             if (arg.type === TaskArgumentType.Literal) {
                 return arg.value;
             }
 
-            let value = arg.value;
+            let value = arg.value.toLowerCase();
 
             if (value.length > 3) {
                 value = value.substring(2, value.length - 1);
             }
 
-            // Stop-gap to make sure we never return an empty return that causes arguments in the shell script to go out
-            // of order.
-            return this.mapTaskArgumentParameter(value, task, taskExecution, worker, tile, context) || value;
+            // Never return an empty result that causes arguments in the shell script to go out of order.  Use the
+            // parameter name as a last resort.
+            //
+            // User-defined parameters from project or stage (not implemented) input override task parameter with same
+            // name.
+            return BasePipelineScheduler.mapUserParameter(value, userParameters) || this.mapTaskArgumentParameter(value, task, taskExecution, worker, tile, context) || value;
         });
     }
 

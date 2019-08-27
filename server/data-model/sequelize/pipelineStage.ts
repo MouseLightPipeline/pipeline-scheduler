@@ -13,6 +13,7 @@ export interface IPipelineStage {
     dst_path?: string;
     function_type?: PipelineStageMethod;
     depth?: number;
+    user_parameters?: string;
     is_processing?: boolean;
     project_id?: string;
     previous_stage_id?: string;
@@ -50,6 +51,10 @@ export function sequelizeImport(sequelize, DataTypes) {
         depth: {
             type: DataTypes.INTEGER,
             defaultValue: 0
+        },
+        user_parameters: {
+            type: DataTypes.TEXT,
+            defaultValue: "{}"
         },
         is_processing: {
             type: DataTypes.BOOLEAN,
