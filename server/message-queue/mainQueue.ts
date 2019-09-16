@@ -55,16 +55,19 @@ export class MainQueue {
             await this.channel.consume(TaskExecutionCompleteQueue, async (msg) => {
                 try {
                     const taskExecution = JSON.parse(msg.content.toString());
+
                     const taskExecution2: IWorkerTaskExecutionAttributes = Object.assign({}, taskExecution, {
                         submitted_at: new Date(taskExecution.submitted_at),
                         started_at: new Date(taskExecution.started_at),
                         completed_at: new Date(taskExecution.completed_at)
                     });
+
                     await this.handleOneCompleteMessage(taskExecution2);
 
                     debug("sending channel ack");
                     this.channel.ack(msg);
                 } catch (err) {
+                    this.channel.nack(msg, false, true);
                     debug(err);
                 }
             }, {noAck: false});
@@ -80,6 +83,7 @@ export class MainQueue {
                     await this.handleOneUpdateMessage(taskExecution2);
                     this.channel.ack(msg);
                 } catch (err) {
+                    this.channel.nack(msg, false, true);
                     debug(err);
                 }
             }, {noAck: false});
