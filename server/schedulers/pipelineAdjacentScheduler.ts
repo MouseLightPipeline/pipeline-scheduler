@@ -28,8 +28,14 @@ interface IMuxUpdateLists extends IMuxTileLists {
 
 export class PipelineAdjacentScheduler extends StagePipelineScheduler {
 
+    private _adjacentTileDelta: number = 1;
+
     public constructor(pipelineStage: IPipelineStage, project: IProject) {
         super(pipelineStage, project);
+    }
+
+    public set AdjacentTileDelta(delta: number) {
+        this._adjacentTileDelta = delta;
     }
 
     public get OutputStageConnector(): AdjacentTileStageConnector {
@@ -53,13 +59,13 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
         return super.mapTaskArgumentParameter(valueLowerCase, task, taskExecution, worker, tile, context);
     }
 
-    private async findPreviousLayerTile(inputTile: IPipelineTileAttributes): Promise<IPipelineTile> {
+    private async findAdjacentLayerTile(inputTile: IPipelineTileAttributes): Promise<IPipelineTile> {
         let where = null;
 
         switch (this._pipelineStage.function_type) {
             case PipelineStageMethod.XAdjacentTileComparison:
                 where = {
-                    lat_x: inputTile.lat_x + 1,
+                    lat_x: inputTile.lat_x + this._adjacentTileDelta,
                     lat_y: inputTile.lat_y,
                     lat_z: inputTile.lat_z
                 };
@@ -67,7 +73,7 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
             case PipelineStageMethod.YAdjacentTileComparison:
                 where = {
                     lat_x: inputTile.lat_x,
-                    lat_y: inputTile.lat_y + 1,
+                    lat_y: inputTile.lat_y + this._adjacentTileDelta,
                     lat_z: inputTile.lat_z
                 };
                 break;
@@ -75,12 +81,12 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
                 where = {
                     lat_x: inputTile.lat_x,
                     lat_y: inputTile.lat_y,
-                    lat_z: inputTile.lat_z + 1
+                    lat_z: inputTile.lat_z + this._adjacentTileDelta
                 };
                 break;
         }
 
-        return where ? this._inputStageConnector.loadTile(where) : null;
+        return where ? await this._inputStageConnector.loadTile(where) : null;
     }
 
     protected async muxInputOutputTiles(knownInput: IPipelineTile[], knownOutput: IPipelineTile[]) {
@@ -151,7 +157,7 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
         let tile = null;
 
         if (adjacentMap === null) {
-            tile = await this.findPreviousLayerTile(inputTile);
+            tile = await this.findAdjacentLayerTile(inputTile);
         } else {
             // Assert the existing map is still valid given something is curated/deleted.
             const index = toDelete.indexOf(adjacentMap.adjacent_relative_path);

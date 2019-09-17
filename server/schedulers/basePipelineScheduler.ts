@@ -38,7 +38,6 @@ export enum TilePipelineStatus {
     Canceled = 6
 }
 
-
 export interface IMuxTileLists {
     toInsert: IPipelineTileAttributes[],
     toUpdate: IPipelineTile[],
