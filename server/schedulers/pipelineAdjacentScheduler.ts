@@ -1,9 +1,5 @@
 import * as _ from "lodash";
 
-const {performance} = require("perf_hooks");
-
-const debug = require("debug")("pipeline:scheduler:adjacent-scheduler");
-
 import {
     TilePipelineStatus,
     DefaultPipelineIdKey,
@@ -46,7 +42,7 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
         return this.OutputStageConnector.loadAdjacentTile(tile.relative_path);
     }
 
-    protected mapTaskArgumentParameter(valueLowerCase: string, task: ITaskDefinition, taskExecution: ITaskExecutionAttributes, worker: IPipelineWorker, tile: IPipelineTileAttributes, context: IAdjacentTile): string {
+    protected mapTaskArgumentParameter(project: IProject, valueLowerCase: string, task: ITaskDefinition, taskExecution: ITaskExecutionAttributes, worker: IPipelineWorker, tile: IPipelineTileAttributes, context: IAdjacentTile): string {
         if (context !== null) {
             switch (valueLowerCase) {
                 case "adjacent_tile_relative_path":
@@ -56,7 +52,7 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
             }
         }
 
-        return super.mapTaskArgumentParameter(valueLowerCase, task, taskExecution, worker, tile, context);
+        return super.mapTaskArgumentParameter(project, valueLowerCase, task, taskExecution, worker, tile, context);
     }
 
     private async findAdjacentLayerTile(inputTile: IPipelineTileAttributes): Promise<IPipelineTile> {
@@ -99,8 +95,6 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
             toDeleteAdjacentMapIndex: []
         };
 
-        const t0 = performance.now();
-
         // Flatten input and and output for faster searching.
         // const knownOutputIdLookup = knownOutput.map(obj => obj[DefaultPipelineIdKey]);
         // const knownInputIdLookup = knownInput.map(obj => obj[DefaultPipelineIdKey]);
@@ -134,8 +128,6 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
         await this.OutputStageConnector.insertAdjacent(muxUpdateLists.toInsertAdjacentMapIndex);
 
         await this.OutputStageConnector.deleteAdjacent(muxUpdateLists.toDeleteAdjacentMapIndex);
-
-        debug(`${this._source.name}: mux ${(performance.now() - t0).toFixed(3)} ms`);
 
         // Insert, update, delete handled by base.
         return muxUpdateLists;

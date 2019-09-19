@@ -32,14 +32,19 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
         this._pipelineStage = pipelineStage;
     }
 
+    public async getSource(): Promise<IProject | IPipelineStage> {
+        return await PersistentStorageManager.Instance().PipelineStages.findById(this._sourceId);
+    }
+
     protected async createOutputStageConnector(connector: ProjectDatabaseConnector): Promise<StageTableConnector> {
         return await connector.connectorForStage(this._pipelineStage);
     }
 
     protected async createTables(connector: ProjectDatabaseConnector) {
         if (await super.createTables(connector)) {
+            const project = await this.getProject();
             if (this._pipelineStage.previous_stage_id === null) {
-                this._inputStageConnector = await connector.connectorForProject(this._project);
+                this._inputStageConnector = await connector.connectorForProject(project);
             } else {
                 const stage = await PersistentStorageManager.Instance().PipelineStages.findById(this._pipelineStage.previous_stage_id);
                 this._inputStageConnector = await connector.connectorForStage(stage);
@@ -72,7 +77,9 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
 
             this._knownInputSkipCheckCount = 0;
         } else {
-            debug(`${this._source.name}: skipping new to queue check with available to process (skip count ${this._knownInputSkipCheckCount} of ${MAX_KNOWN_INPUT_SKIP_COUNT})`);
+            const source = await this.getSource();
+
+            debug(`${source.name}: skipping new to queue check with available to process (skip count ${this._knownInputSkipCheckCount} of ${MAX_KNOWN_INPUT_SKIP_COUNT})`);
             this._knownInputSkipCheckCount++;
         }
 
@@ -80,18 +87,20 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
     }
 
     protected async performProcessing(): Promise<void> {
-        let allWorkers = await PersistentStorageManager.Instance().getPipelineWorkers();
+        const source = await this.getSource();
 
-        let workers = allWorkers.filter(worker => worker.is_in_scheduler_pool);
+        const allWorkers = await PersistentStorageManager.Instance().getPipelineWorkers();
+
+        const workers = allWorkers.filter(worker => worker.is_in_scheduler_pool);
 
         if (workers.length === 0) {
-            debug(`${this._source.name}: no available workers to schedule (of ${allWorkers.length} known)`);
+            debug(`${source.name}: no available workers to schedule (of ${allWorkers.length} known)`);
             return;
         }
 
-        let project: IProject = await PersistentStorageManager.Instance().Projects.findById(this._project.id);
+        const project = await this.getProject();
 
-        let pipelineStages = PersistentStorageManager.Instance().PipelineStages;
+        const pipelineStages = PersistentStorageManager.Instance().PipelineStages;
 
         let src_path = project.root_path;
 
@@ -116,7 +125,7 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
             const task = await PersistentStorageManager.Instance().TaskDefinitions.findById(this._pipelineStage.task_id);
 
             if (((real_time_worker.local_task_load + task.local_work_units) > real_time_worker.local_work_capacity) && ((real_time_worker.cluster_task_load + task.cluster_work_units) > real_time_worker.cluster_work_capacity)) {
-                debug(`${this._source.name}: worker ${worker.name} has insufficient capacity, ignoring worker [${real_time_worker.local_task_load} load of ${real_time_worker.local_work_capacity}, ${real_time_worker.cluster_task_load} load of ${real_time_worker.cluster_work_capacity}]`);
+                debug(`${source.name}: worker ${worker.name} has insufficient capacity, ignoring worker [${real_time_worker.local_task_load} load of ${real_time_worker.local_work_capacity}, ${real_time_worker.cluster_task_load} load of ${real_time_worker.cluster_work_capacity}]`);
                 return true;
             }
 
@@ -126,7 +135,7 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
                 return false;
             }
 
-            debug(`${this._source.name}: scheduling worker from available ${waitingToProcess.length} pending`);
+            debug(`${source.name}: scheduling worker from available ${waitingToProcess.length} pending`);
 
             // Will continue through all tiles until the worker reaches full capacity
             let stillLookingForTilesForWorker = await this.queue(waitingToProcess, async (toProcessTile: IToProcessTileAttributes) => {
@@ -178,7 +187,7 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
 
                             await pipelineTile.save();
 
-                            debug(`${this._source.name}: returned failed task start from worker ${worker.name}`);
+                            debug(`${source.name}: returned failed task start from worker ${worker.name}`);
                         } else {
                             let taskExecution = await this._outputStageConnector.createTaskExecution(Object.assign(taskExecutionInput, {
                                 worker_task_execution_id: responseExecution.id,
@@ -207,30 +216,30 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
 
                             await this._outputStageConnector.deleteToProcessTile(toProcessTile);
 
-                            debug(`${this._source.name}: started task on worker ${worker.name} with execution id ${taskExecution.id}`);
+                            debug(`${source.name}: started task on worker ${worker.name} with execution id ${taskExecution.id}`);
                         }
 
                         return true;
                     } else {
                         if (startTaskResponse != null) {
                             if (((startTaskResponse.localTaskLoad + task.local_work_units) > real_time_worker.local_work_capacity) && ((startTaskResponse.clusterTaskLoad + task.cluster_work_units) > real_time_worker.cluster_work_capacity)) {
-                                debug(`${this._source.name}: worker ${worker.name} rejected for insufficient capacity for further tasks [${startTaskResponse.localTaskLoad} load of ${real_time_worker.local_work_capacity}, ${startTaskResponse.clusterTaskLoad} load of ${real_time_worker.cluster_work_capacity}]`);
+                                debug(`${source.name}: worker ${worker.name} rejected for insufficient capacity for further tasks [${startTaskResponse.localTaskLoad} load of ${real_time_worker.local_work_capacity}, ${startTaskResponse.clusterTaskLoad} load of ${real_time_worker.cluster_work_capacity}]`);
                             } else {
-                                debug(`${this._source.name}: start task did not error, however returned null taskExecution`);
+                                debug(`${source.name}: start task did not error, however returned null taskExecution`);
                             }
                         } else {
-                            debug(`${this._source.name}: start task did not error, however returned null`);
+                            debug(`${source.name}: start task did not error, however returned null`);
                         }
                         return false;
                     }
                 } catch (err) {
-                    debug(`${this._source.name}: worker ${worker.name} with error starting execution ${err}`);
+                    debug(`${source.name}: worker ${worker.name} with error starting execution ${err}`);
                     return false;
                 }
             });
 
             if (!this.IsProcessingRequested || this.IsExitRequested) {
-                debug(`${this._source.name}: cancel requested - exiting stage worker`);
+                debug(`${source.name}: cancel requested - exiting stage worker`);
                 return false;
             }
 

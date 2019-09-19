@@ -1,5 +1,3 @@
-import {PersistentStorageManager} from "../data-access/sequelize/databaseConnector";
-
 const {performance} = require("perf_hooks");
 
 const fse = require("fs-extra");
@@ -25,6 +23,7 @@ import {isNullOrUndefined} from "util";
 import {ProjectDatabaseConnector} from "../data-access/sequelize/project-connectors/projectDatabaseConnector";
 import {ServiceOptions} from "../options/serverOptions";
 import {PipelineApiClient} from "../graphql/pipelineApiClient";
+import {IPipelineStage} from "../data-model/sequelize/pipelineStage";
 
 interface IPosition {
     x: number;
@@ -62,16 +61,21 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
         this.IsProcessingRequested = true;
     }
 
+    public async getSource(): Promise<IProject | IPipelineStage> {
+        return this.getProject();
+    }
+
     protected async createOutputStageConnector(connector: ProjectDatabaseConnector): Promise<StageTableConnector> {
-        return await connector.connectorForProject(this._project);
+        return await connector.connectorForProject(await this.getProject());
     }
 
     protected async refreshTileStatus(): Promise<boolean> {
         // For the tile status stage (project "0" depth stage), refreshing the tile status _is_ the work.
+        const project = await this.getProject();
 
-        debug(`pipeline input update for project ${this._project.name}`);
+        debug(`pipeline input update for project ${project.name}`);
 
-        const knownInput = await this.performJsonUpdate();
+        const knownInput = await this.performJsonUpdate(project);
 
         await this.refreshWithKnownInput(knownInput);
 
@@ -109,8 +113,6 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
             });
         });
 
-        let t0 = performance.now();
-
         const existingTilePaths = new Map<string, IPipelineTile>();
 
         knownOutput.map(t => existingTilePaths.set(t.relative_path, t));
@@ -142,13 +144,11 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
             }
         }).filter(t => t !== null);
 
-        debug(`${this._project.name}: mux ${(performance.now() - t0).toFixed(3)} ms`);
-
         return sorted;
     }
 
-    private async performJsonUpdate(): Promise<IPipelineTileAttributes[]> {
-        let root = this._project.root_path;
+    private async performJsonUpdate(project: IProject): Promise<IPipelineTileAttributes[]> {
+        let root = project.root_path;
 
         ServiceOptions.driveMapping.map(d => {
             if (root.startsWith(d.remote)) {
@@ -157,7 +157,7 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
         });
 
         if (!fse.existsSync(root)) {
-            await PipelineApiClient.Instance().updateProject(this._project.id, ProjectInputSourceState.BadLocation);
+            await PipelineApiClient.Instance().updateProject(project.id, ProjectInputSourceState.BadLocation);
             return [];
         }
 
@@ -169,23 +169,23 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
             dataFile = path.join(root, dashboardJsonFile);
 
             if (!fse.existsSync(dataFile)) {
-                await PipelineApiClient.Instance().updateProject(this._project.id, ProjectInputSourceState.Missing);
+                await PipelineApiClient.Instance().updateProject(project.id, ProjectInputSourceState.Missing);
                 debug(`${dashboardJsonFile} also does not exist in the project root path ${dataFile} - skipping tile update`);
                 return [];
             }
 
-            await PipelineApiClient.Instance().updateProject(this._project.id, ProjectInputSourceState.Dashboard);
+            await PipelineApiClient.Instance().updateProject(project.id, ProjectInputSourceState.Dashboard);
         } else {
-            await PipelineApiClient.Instance().updateProject(this._project.id, ProjectInputSourceState.Pipeline);
+            await PipelineApiClient.Instance().updateProject(project.id, ProjectInputSourceState.Pipeline);
         }
 
         let projectUpdate: IProjectAttributes = {
-            id: this._project.id
+            id: project.id
         };
 
         let tiles: IProjectAttributes[];
 
-        [projectUpdate, tiles] = await this.parsePipelineInput(dataFile, projectUpdate);
+        [projectUpdate, tiles] = await this.parsePipelineInput(project, dataFile, projectUpdate);
 
         let outputFile = path.join(root, tileStatusJsonFile);
 
@@ -204,21 +204,21 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
         return tiles;
     }
 
-    private async parsePipelineInput(dataFile: string, projectUpdate: IProjectAttributes): Promise<[IProjectAttributes, IPipelineTileAttributes[]]> {
+    private async parsePipelineInput(project: IProject, dataFile: string, projectUpdate: IProjectAttributes): Promise<[IProjectAttributes, IPipelineTileAttributes[]]> {
         let contents = fse.readFileSync(dataFile);
 
         let jsonContent = JSON.parse(contents);
 
         if (!isNullOrUndefined(jsonContent.pipelineFormat)) {
             // Pipeline-specific input format.
-            return this.parsePipelineDefaultInput(jsonContent, projectUpdate);
+            return this.parsePipelineDefaultInput(project, jsonContent, projectUpdate);
         } else {
             // Legacy direct dashboard input format.
-            return this.parseDashboardInput(jsonContent, projectUpdate);
+            return this.parseDashboardInput(project, jsonContent, projectUpdate);
         }
     }
 
-    private async parsePipelineDefaultInput(jsonContent: any, projectUpdate: IProjectAttributes): Promise<[IProjectAttributes, IPipelineTileAttributes[]]> {
+    private async parsePipelineDefaultInput(project: IProject, jsonContent: any, projectUpdate: IProjectAttributes): Promise<[IProjectAttributes, IPipelineTileAttributes[]]> {
         let tiles: IPipelineTileAttributes[] = [];
 
         if (jsonContent.extents != null) {
@@ -229,17 +229,13 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
             projectUpdate.sample_z_min = jsonContent.extents.minimumZ;
             projectUpdate.sample_z_max = jsonContent.extents.maximumZ;
 
-            await this._project.update(projectUpdate);
-
-            this._project = await PersistentStorageManager.Instance().Projects.findById(this._project.id);
+            await project.update(projectUpdate);
         }
 
         if (jsonContent.projectInfo != null && jsonContent.projectInfo.customParameters != null) {
             projectUpdate.user_parameters = JSON.stringify(jsonContent.projectInfo.customParameters);
 
-            await this._project.update(projectUpdate);
-
-            this._project = await PersistentStorageManager.Instance().Projects.findById(this._project.id);
+            await project.update(projectUpdate);
         }
 
         jsonContent.tiles.forEach((tile: IJsonTile) => {
@@ -267,7 +263,7 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
         return [projectUpdate, tiles];
     }
 
-    private async parseDashboardInput(jsonContent: any, projectUpdate: IProjectAttributes): Promise<[IProjectAttributes, IPipelineTileAttributes[]]> {
+    private async parseDashboardInput(project: IProject, jsonContent: any, projectUpdate: IProjectAttributes): Promise<[IProjectAttributes, IPipelineTileAttributes[]]> {
         let tiles: IPipelineTileAttributes[] = [];
 
         if (jsonContent.monitor.extents) {
@@ -278,9 +274,7 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
             projectUpdate.sample_z_min = jsonContent.monitor.extents.minimumZ;
             projectUpdate.sample_z_max = jsonContent.monitor.extents.maximumZ;
 
-            await this._project.update(projectUpdate);
-
-            this._project = await PersistentStorageManager.Instance().Projects.findById(this._project.id);
+            await project.update(projectUpdate);
         }
 
         for (let prop in jsonContent.tileMap) {

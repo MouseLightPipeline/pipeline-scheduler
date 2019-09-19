@@ -21,6 +21,7 @@ import {
 import {ITaskArgument, ITaskDefinition, TaskArgumentType} from "../data-model/sequelize/taskDefinition";
 import {IPipelineWorker} from "../data-model/sequelize/pipelineWorker";
 import {IPipelineStage} from "../data-model/sequelize/pipelineStage";
+import {PersistentStorageManager} from "../data-access/sequelize/databaseConnector";
 
 export const DefaultPipelineIdKey = "relative_path";
 
@@ -46,8 +47,11 @@ export interface IMuxTileLists {
 }
 
 export abstract class BasePipelineScheduler implements ISchedulerInterface {
-    protected _project: IProject;
-    protected _source: IProject | IPipelineStage;
+    // protected _project: IProject;
+    private readonly  _projectId: string;
+
+    protected readonly _sourceId: string;
+    // protected _source: IProject | IPipelineStage;
 
     protected _outputStageConnector: StageTableConnector;
 
@@ -57,8 +61,8 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
     private _isInitialized: boolean = false;
 
     protected constructor(project: IProject, source: IProject | IPipelineStage) {
-        this._project = project;
-        this._source = source;
+        this._projectId = project.id;
+        this._sourceId = source.id;
 
         this.IsExitRequested = false;
 
@@ -82,9 +86,11 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         return this._isProcessingRequested;
     }
 
-    protected get StageId() {
-        return this._source.id;
+    public async getProject(): Promise<IProject> {
+        return await PersistentStorageManager.Instance().Projects.findById(this._projectId);
     }
+
+    public abstract async getSource(): Promise<IProject | IPipelineStage>;
 
     public async run(): Promise<void> {
         if (this._isInitialized) {
@@ -101,18 +107,22 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         // table and remark them incomplete (1) and reprocess them just to be safe
         //
 
+        const project = await this.getProject();
+
+        const source = await this.getSource();
+
         let toProcessInsert: IToProcessTileAttributes[] = [];
 
-        const unscheduled = await this._outputStageConnector.loadUnscheduled();
+        let unscheduled = await this._outputStageConnector.loadUnscheduled();
 
-        debug(`${this._source.name}: found ${unscheduled.length} unscheduled`);
+        debug(`${source.name}: found ${unscheduled.length} unscheduled`);
 
         if (unscheduled.length > 0) {
             let waitingToProcess = await this._outputStageConnector.loadToProcess();
 
             const initialLength = waitingToProcess.length;
 
-            debug(`${this._source.name}: found ${initialLength} waitingToProcess`);
+            debug(`${source.name}: found ${initialLength} waitingToProcess`);
 
             // Only items that are ready to queue, but aren't actually in the toProcess table yet.  There appear to be
             // some resubmit situations where these are out of sync temporarily.
@@ -123,31 +133,31 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
             let alreadyInToProcessTable = _.intersectionBy(unscheduled, waitingToProcess, "relative_path");
 
             let toSchedule = notAlreadyInToProcessTable.filter(tile => {
-                if (this._project.region_x_min != null && tile.lat_x < this._project.region_x_min) {
+                if (project.region_x_min != null && tile.lat_x < project.region_x_min) {
                     return false;
                 }
 
-                if (this._project.region_x_max != null && tile.lat_x > this._project.region_x_max) {
+                if (project.region_x_max != null && tile.lat_x > project.region_x_max) {
                     return false;
                 }
 
-                if (this._project.region_y_min != null && tile.lat_y < this._project.region_y_min) {
+                if (project.region_y_min != null && tile.lat_y < project.region_y_min) {
                     return false;
                 }
 
-                if (this._project.region_y_max != null && tile.lat_y > this._project.region_y_max) {
+                if (project.region_y_max != null && tile.lat_y > project.region_y_max) {
                     return false;
                 }
 
-                if (this._project.region_z_min != null && tile.lat_z < this._project.region_z_min) {
+                if (project.region_z_min != null && tile.lat_z < project.region_z_min) {
                     return false;
                 }
 
-                return !(this._project.region_z_max != null && tile.lat_z > this._project.region_z_max);
+                return !(project.region_z_max != null && tile.lat_z > project.region_z_max);
             });
 
             if (initialLength !== toSchedule.length) {
-                debug(`${this._source.name}: have ${toSchedule.length} unscheduled after region filtering`);
+                debug(`${source.name}: have ${toSchedule.length} unscheduled after region filtering`);
             }
 
             toSchedule = toSchedule.map(obj => {
@@ -277,16 +287,16 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         return null;
     }
 
-    private static  mapUserParameter(valueLowerCase: string, userParameters: Map<string, string>): string {
+    private static mapUserParameter(valueLowerCase: string, userParameters: Map<string, string>): string {
         return userParameters.has(valueLowerCase) ? userParameters.get(valueLowerCase) : null;
     }
 
-    protected mapTaskArgumentParameter(valueLowerCase: string, task: ITaskDefinition, taskExecution: ITaskExecutionAttributes, worker: IPipelineWorker, tile: IPipelineTileAttributes, context: any): string {
+    protected mapTaskArgumentParameter(project: IProject, valueLowerCase: string, task: ITaskDefinition, taskExecution: ITaskExecutionAttributes, worker: IPipelineWorker, tile: IPipelineTileAttributes, context: any): string {
         switch (valueLowerCase) {
             case "project_name":
-                return this._project.name;
+                return project.name;
             case "project_root":
-                return this._project.root_path;
+                return project.root_path;
             case "log_file":
                 return taskExecution.resolved_log_path;
             case "x":
@@ -341,7 +351,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
             //
             // User-defined parameters from project or stage (not implemented) input override task parameter with same
             // name.
-            return BasePipelineScheduler.mapUserParameter(value, userParameters) || this.mapTaskArgumentParameter(value, task, taskExecution, worker, tile, context) || value;
+            return BasePipelineScheduler.mapUserParameter(value, userParameters) || this.mapTaskArgumentParameter(project, value, task, taskExecution, worker, tile, context) || value;
         });
     }
 
@@ -355,6 +365,8 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
     }
 
     protected async refreshWithKnownInput(knownInput: any[]) {
+        const source = await this.getSource();
+
         if (knownInput.length > 0) {
             let knownOutput = await this._outputStageConnector.loadTiles({attributes: [DefaultPipelineIdKey, "prev_stage_status", "this_stage_status"]});
 
@@ -375,9 +387,9 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
                 await this._outputStageConnector.deleteToProcess(sorted.toReset.map(t => t.relative_path));
             }
 
-            debug(`${this._source.name}: ${sorted.toInsert.length} insert, ${sorted.toUpdate.length} update, ${sorted.toDelete.length} delete, ${sorted.toReset.length} reset`);
+            debug(`${source.name}: ${sorted.toInsert.length} insert, ${sorted.toUpdate.length} update, ${sorted.toDelete.length} delete, ${sorted.toReset.length} reset`);
         } else {
-            debug(`${this._source.name}: no input from previous stage`);
+            debug(`${source.name}: no input from previous stage`);
         }
     }
 
@@ -390,7 +402,9 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
 
     protected async performWork() {
         if (this.IsExitRequested) {
-            debug(`${this._source.name}: cancel requested - exiting stage worker`);
+            const source = await this.getSource();
+
+            debug(`${source.name}: cancel requested - exiting stage worker`);
             return;
         }
 
@@ -429,7 +443,9 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
                 return;
             }
 
-            const connector = await connectorForProject(this._project);
+            const project = await this.getProject();
+
+            const connector = await connectorForProject(project);
 
             const connected = await this.createTables(connector);
 

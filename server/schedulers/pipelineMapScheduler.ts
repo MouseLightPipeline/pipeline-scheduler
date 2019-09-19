@@ -53,8 +53,6 @@ export class PipelineMapScheduler extends StagePipelineScheduler {
             };
         });
 
-        let t0 = performance.now();
-
         const existingTilePaths = knownOutput.reduce((p, t) => {
             p[t.relative_path] = t;
             return p;
@@ -89,8 +87,6 @@ export class PipelineMapScheduler extends StagePipelineScheduler {
                 return null;
             }
         }).filter(t => t !== null);
-
-        debug(`${this._source.name}: ${(performance.now() - t0).toFixed(3)} ms mux`);
 
         return sorted;
     }
