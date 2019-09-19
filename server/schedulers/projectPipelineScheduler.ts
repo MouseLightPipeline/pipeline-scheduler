@@ -82,7 +82,7 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
         return true;
     }
 
-    protected async muxInputOutputTiles(knownInput: IPipelineTileAttributes[], knownOutput: IPipelineTile[]): Promise<IMuxTileLists> {
+    protected async muxInputOutputTiles(project: IProject, knownInput: IPipelineTileAttributes[], knownOutput: IPipelineTile[]): Promise<IMuxTileLists> {
         const sorted: IMuxTileLists = {
             toInsert: [],
             toUpdate: [],

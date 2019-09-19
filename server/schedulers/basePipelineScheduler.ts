@@ -117,6 +117,13 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
 
         debug(`${source.name}: found ${unscheduled.length} unscheduled`);
 
+        const zPlaneSkip: Array<number> = project.zPlaneSkipIndices;
+
+        if (zPlaneSkip.length > 0) {
+            unscheduled = unscheduled.filter(t => !_.includes(zPlaneSkip, t.lat_z));
+            debug(`${source.name}: found ${unscheduled.length} unscheduled after removing skipped z planes`);
+        }
+
         if (unscheduled.length > 0) {
             let waitingToProcess = await this._outputStageConnector.loadToProcess();
 
@@ -355,7 +362,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         });
     }
 
-    protected async muxInputOutputTiles(knownInput, knownOutput: IPipelineTile[]): Promise<IMuxTileLists> {
+    protected async muxInputOutputTiles(project: IProject, knownInput, knownOutput: IPipelineTile[]): Promise<IMuxTileLists> {
         return {
             toInsert: [],
             toUpdate: [],
@@ -365,12 +372,14 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
     }
 
     protected async refreshWithKnownInput(knownInput: any[]) {
+        const project = await this.getProject();
+
         const source = await this.getSource();
 
         if (knownInput.length > 0) {
             let knownOutput = await this._outputStageConnector.loadTiles({attributes: [DefaultPipelineIdKey, "prev_stage_status", "this_stage_status"]});
 
-            let sorted = await this.muxInputOutputTiles(knownInput, knownOutput);
+            let sorted = await this.muxInputOutputTiles(project, knownInput, knownOutput);
 
             await this._outputStageConnector.insertTiles(sorted.toInsert);
 

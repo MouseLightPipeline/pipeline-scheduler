@@ -16,7 +16,7 @@ export class PipelineMapScheduler extends StagePipelineScheduler {
         super(pipelineStage, project);
     }
 
-    protected async muxInputOutputTiles(knownInput: IPipelineTile[], knownOutput: IPipelineTile[]): Promise<IMuxTileLists> {
+    protected async muxInputOutputTiles(project: IProject, knownInput: IPipelineTile[], knownOutput: IPipelineTile[]): Promise<IMuxTileLists> {
         let sorted: IMuxTileLists = {
             toInsert: [],
             toUpdate: [],
