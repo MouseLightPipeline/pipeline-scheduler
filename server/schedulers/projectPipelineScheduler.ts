@@ -238,6 +238,12 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
             await project.update(projectUpdate);
         }
 
+        if (jsonContent.planeMarkers != null) {
+            project.plane_markers = JSON.stringify(jsonContent.planeMarkers);
+
+            await project.update(projectUpdate);
+        }
+
         jsonContent.tiles.forEach((tile: IJsonTile) => {
             // Normalize paths to posix
             let normalizedPath = tile.relativePath.replace(new RegExp("\\" + "\\", "g"), "/");
@@ -273,6 +279,13 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
             projectUpdate.sample_y_max = jsonContent.monitor.extents.maximumY;
             projectUpdate.sample_z_min = jsonContent.monitor.extents.minimumZ;
             projectUpdate.sample_z_max = jsonContent.monitor.extents.maximumZ;
+
+            await project.update(projectUpdate);
+        }
+
+
+        if (jsonContent.planeMarkers != null) {
+            project.plane_markers = JSON.stringify(jsonContent.planeMarkers);
 
             await project.update(projectUpdate);
         }
