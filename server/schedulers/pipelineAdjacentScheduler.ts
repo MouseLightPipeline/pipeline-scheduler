@@ -140,7 +140,7 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
 
     private async updateAdjacentTile(project: IProject, inputTile: IPipelineTile, knownInputIdLookup, knownOutputIdLookup, nextLayerMapIdLookup, toDelete: string[], muxUpdateLists: IMuxUpdateLists): Promise<void> {
         // If the source tile is now in a skip plane, remove and do not remap.
-        if (_.includes(project.zPlaneSkipIndices, inputTile.lat_z) || _.includes(toDelete, inputTile.relative_path) {
+        if (_.includes(project.zPlaneSkipIndices, inputTile.lat_z) || _.includes(toDelete, inputTile.relative_path)) {
             muxUpdateLists.toDeleteAdjacentMapIndex.push(inputTile.relative_path);
             return;
         }
