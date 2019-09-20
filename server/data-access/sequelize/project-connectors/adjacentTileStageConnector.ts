@@ -6,6 +6,9 @@ export interface IAdjacentTileAttributes {
     relative_path: string,
     adjacent_relative_path: string;
     adjacent_tile_name: string;
+    lat_x: number;
+    lat_y: number;
+    lat_z: number;
 }
 
 export interface IAdjacentTile extends Instance<IAdjacentTileAttributes>, IAdjacentTileAttributes {
@@ -57,6 +60,18 @@ export class AdjacentTileStageConnector extends StageTableConnector {
             },
             adjacent_tile_name: {
                 type: this._connection.Sequelize.TEXT,
+                defaultValue: null
+            },
+            lat_x: {
+                type: this._connection.Sequelize.INTEGER,
+                defaultValue: null
+            },
+            lat_y: {
+                type: this._connection.Sequelize.INTEGER,
+                defaultValue: null
+            },
+            lat_z: {
+                type: this._connection.Sequelize.INTEGER,
                 defaultValue: null
             }
         }, {

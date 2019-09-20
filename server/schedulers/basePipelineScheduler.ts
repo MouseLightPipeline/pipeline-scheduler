@@ -48,7 +48,7 @@ export interface IMuxTileLists {
 
 export abstract class BasePipelineScheduler implements ISchedulerInterface {
     // protected _project: IProject;
-    private readonly  _projectId: string;
+    private readonly _projectId: string;
 
     protected readonly _sourceId: string;
     // protected _source: IProject | IPipelineStage;
@@ -117,7 +117,10 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
 
         debug(`${source.name}: found ${unscheduled.length} unscheduled`);
 
-        const zPlaneSkip: Array<number> = project.zPlaneSkipIndices;
+        const zPlaneSkip = project.zPlaneSkipIndices;
+
+        // Find queued items that are no longer applicable due to plane marker addition.
+        await this._outputStageConnector.dequeueForZPlanes(zPlaneSkip);
 
         if (zPlaneSkip.length > 0) {
             unscheduled = unscheduled.filter(t => !_.includes(zPlaneSkip, t.lat_z));
@@ -177,6 +180,9 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
             toProcessInsert = toSchedule.map(obj => {
                 return {
                     relative_path: obj.relative_path,
+                    lat_x: obj.lat_x,
+                    lat_y: obj.lat_y,
+                    lat_z: obj.lat_z,
                     created_at: now,
                     updated_at: now
                 };

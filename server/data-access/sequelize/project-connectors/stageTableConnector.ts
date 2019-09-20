@@ -1,15 +1,14 @@
-import {Instance, Model, Sequelize} from "sequelize";
-
-const debug = require("debug")("pipeline:scheduler:stage-database-connector");
-
+import {Instance, Model, Op, Sequelize} from "sequelize";
 import {TilePipelineStatus} from "../../../schedulers/basePipelineScheduler";
 import {
     augmentTaskExecutionModel,
-    createTaskExecutionTable, IStartTaskInput, ITaskExecution, ITaskExecutionAttributes,
+    createTaskExecutionTable,
+    ITaskExecution,
+    ITaskExecutionAttributes,
     ITaskExecutionModel
 } from "../../../data-model/taskExecution";
-import {IPipelineWorker} from "../../../data-model/sequelize/pipelineWorker";
-import {ITaskDefinition} from "../../../data-model/sequelize/taskDefinition";
+
+const debug = require("debug")("pipeline:scheduler:stage-database-connector");
 
 export function generatePipelineCustomTableName(pipelineStageId: string, tableName) {
     return pipelineStageId + "_" + tableName;
@@ -144,6 +143,16 @@ export class StageTableConnector {
 
     public async loadToProcess(limit: number = null): Promise<IToProcessTile[]> {
         return this._toProcessTable.findAll({order: [["relative_path", "ASC"]], limit: limit});
+    }
+
+    public async dequeueForZPlanes(planes: number[]) {
+        if (!planes || planes.length === 0) {
+            return;
+        }
+
+        await this._toProcessTable.destroy({where: {lat_z: {[Op.in]: planes}}});
+
+        await this._tileTable.update({this_stage_status: TilePipelineStatus.Incomplete}, {where: {[Op.and]: [{lat_z: {[Op.in]: planes}, this_stage_status: TilePipelineStatus.Queued}]}});
     }
 
     public async loadTaskExecution(id: string): Promise<ITaskExecution> {
@@ -363,6 +372,18 @@ export class StageTableConnector {
                 primaryKey: true,
                 unique: true,
                 type: DataTypes.TEXT
+            },
+            lat_x: {
+                type: DataTypes.INTEGER,
+                defaultValue: null
+            },
+            lat_y: {
+                type: DataTypes.INTEGER,
+                defaultValue: null
+            },
+            lat_z: {
+                type: DataTypes.INTEGER,
+                defaultValue: null
             }
         }, {
             timestamps: true,

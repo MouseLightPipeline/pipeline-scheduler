@@ -75,7 +75,7 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
             case PipelineStageMethod.ZAdjacentTileComparison:
                 let zAdjacent = inputTile.lat_z + this._adjacentTileDelta;
 
-                const zPlaneSkip: Array<number> = project.zPlaneSkipIndices;
+                const zPlaneSkip = project.zPlaneSkipIndices;
 
                 if (zPlaneSkip.length > 0) {
                     while (_.includes(zPlaneSkip, zAdjacent)) {
@@ -126,7 +126,7 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
         // Force serial execution of each tile given async calls within function.
         await knownInput.reduce(async (promiseChain, inputTile) => {
             return promiseChain.then(() => {
-                return this.muxUpdateTile(project, inputTile, knownInputIdLookup, knownOutputIdLookup, adjacentMapIdLookup, muxUpdateLists.toDelete, muxUpdateLists);
+                return this.updateAdjacentTile(project, inputTile, knownInputIdLookup, knownOutputIdLookup, adjacentMapIdLookup, muxUpdateLists.toDelete, muxUpdateLists);
             });
         }, Promise.resolve());
 
@@ -138,30 +138,47 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
         return muxUpdateLists;
     }
 
-    private async muxUpdateTile(project: IProject, inputTile: IPipelineTile, knownInputIdLookup, knownOutputIdLookup, nextLayerMapIdLookup, toDelete: string[], muxUpdateLists: IMuxUpdateLists): Promise<void> {
-        const existingOutput = knownOutputIdLookup[inputTile.relative_path] || null;
-
-        let adjacentMap: IAdjacentTileAttributes = nextLayerMapIdLookup[inputTile.relative_path] || null;
-
-        let tile = null;
-
-        if (adjacentMap === null) {
-            tile = await this.findAdjacentLayerTile(project, inputTile);
-        } else {
-            // Assert the existing map is still valid given something is curated/deleted.
-            const index = toDelete.indexOf(adjacentMap.adjacent_relative_path);
-
-            // Remove entry.  If a replacement exists, will be captured next time around.
-            if (index >= 0) {
-                muxUpdateLists.toDeleteAdjacentMapIndex.push(inputTile.relative_path);
-            }
+    private async updateAdjacentTile(project: IProject, inputTile: IPipelineTile, knownInputIdLookup, knownOutputIdLookup, nextLayerMapIdLookup, toDelete: string[], muxUpdateLists: IMuxUpdateLists): Promise<void> {
+        // If the source tile is now in a skip plane, remove and do not remap.
+        if (_.includes(project.zPlaneSkipIndices, inputTile.lat_z) || _.includes(toDelete, inputTile.relative_path) {
+            muxUpdateLists.toDeleteAdjacentMapIndex.push(inputTile.relative_path);
+            return;
         }
 
-        if (tile !== null) {
+        const existingOutput = knownOutputIdLookup[inputTile.relative_path] || null;
+
+        let adjacentMap = nextLayerMapIdLookup[inputTile.relative_path] || null;
+
+        const tile = await this.findAdjacentLayerTile(project, inputTile);
+
+        if (adjacentMap !== null) {
+            // Assert the existing map is still valid given something is curated/deleted.  Either the existing listed
+            // adjacent tile itself could have been deleted or which tile is considered adjacent may have changed.  For
+            // example, the layer has been added to skip planes and there is no match in the next plane (tile == null)
+            const isDeleted = toDelete.indexOf(adjacentMap.adjacent_relative_path) >= 0 || tile == null;
+
+            if (isDeleted || tile == null) {
+                // Remove entry.  If a replacement exists, will be captured next time around where adjacentMap will then
+                // come back as null.
+                muxUpdateLists.toDeleteAdjacentMapIndex.push(inputTile.relative_path);
+            } else if (adjacentMap.lat_z !== tile.lat_z || adjacentMap.adjacent_relative_path !== adjacentMap.adjacent_relative_path) {
+                // findAdjacentLayerTile() returned with a different tile or a modified depth for the tile.
+                await adjacentMap.update({
+                    adjacent_relative_path: tile.relative_path,
+                    adjacent_tile_name: tile.tile_name,
+                    lat_x: tile.lat_x,
+                    lat_y: tile.lat_y,
+                    lat_z: tile.lat_z
+                });
+            }
+        } else if (tile !== null) {
             adjacentMap = {
                 relative_path: inputTile.relative_path,
                 adjacent_relative_path: tile.relative_path,
-                adjacent_tile_name: tile.tile_name
+                adjacent_tile_name: tile.tile_name,
+                lat_x: tile.lat_x,
+                lat_y: tile.lat_y,
+                lat_z: tile.lat_z
             };
 
             muxUpdateLists.toInsertAdjacentMapIndex.push(adjacentMap);

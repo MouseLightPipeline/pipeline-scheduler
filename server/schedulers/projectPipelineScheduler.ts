@@ -239,7 +239,7 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
         }
 
         if (jsonContent.planeMarkers != null) {
-            project.plane_markers = JSON.stringify(jsonContent.planeMarkers);
+            projectUpdate.plane_markers = JSON.stringify(jsonContent.planeMarkers);
 
             await project.update(projectUpdate);
         }
@@ -285,7 +285,7 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
 
 
         if (jsonContent.planeMarkers != null) {
-            project.plane_markers = JSON.stringify(jsonContent.planeMarkers);
+            projectUpdate.plane_markers = JSON.stringify(jsonContent.planeMarkers);
 
             await project.update(projectUpdate);
         }
