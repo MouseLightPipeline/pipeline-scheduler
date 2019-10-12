@@ -124,8 +124,8 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
 
             const task = await PersistentStorageManager.Instance().TaskDefinitions.findById(this._pipelineStage.task_id);
 
-            if (((real_time_worker.local_task_load + task.local_work_units) > real_time_worker.local_work_capacity) && ((real_time_worker.cluster_task_load + task.cluster_work_units) > real_time_worker.cluster_work_capacity)) {
-                debug(`${source.name}: worker ${worker.name} has insufficient capacity, ignoring worker [${real_time_worker.local_task_load} load of ${real_time_worker.local_work_capacity}, ${real_time_worker.cluster_task_load} load of ${real_time_worker.cluster_work_capacity}]`);
+            if (((real_time_worker.local_task_load + task.local_work_units - 0.0001) > real_time_worker.local_work_capacity) && ((real_time_worker.cluster_task_load + task.cluster_work_units - 0.0001) > real_time_worker.cluster_work_capacity)) {
+                debug(`${source.name}: worker ${worker.name} has insufficient capacity, ignoring worker [${real_time_worker.local_task_load.toFixed(1)} load of ${real_time_worker.local_work_capacity.toFixed(1)}, ${real_time_worker.cluster_task_load.toFixed(1)} load of ${real_time_worker.cluster_work_capacity.toFixed(1)}]`);
                 return true;
             }
 
