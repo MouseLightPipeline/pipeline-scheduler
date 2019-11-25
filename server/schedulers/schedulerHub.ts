@@ -7,17 +7,16 @@ const debug = require("debug")("pipeline:scheduler:scheduler-hub");
 
 import {startTileStatusFileWorker} from "./projectPipelineSchedulerChildProcess";
 import {startMapPipelineStageWorker} from "./pipelineMapSchedulerChildProcess";
-import {PersistentStorageManager} from "../data-access/sequelize/databaseConnector";
-import {IProjectAttributes} from "../data-model/sequelize/project";
-import {IPipelineStage, PipelineStageMethod} from "../data-model/sequelize/pipelineStage";
-import {ITaskExecutionAttributes, IWorkerTaskExecutionAttributes} from "../data-model/taskExecution";
+import {Project} from "../data-model/project";
+import {PipelineStage, PipelineStageMethod} from "../data-model/pipelineStage";
+import {WorkerTaskExecution} from "../data-model/workerTaskExecution";
 
 export interface ISchedulerInterface {
     IsExitRequested: boolean;
     IsProcessingRequested: boolean;
 
-    onTaskExecutionComplete(executionInfo: ITaskExecutionAttributes): Promise<void>;
-    onTaskExecutionUpdate(executionInfo: ITaskExecutionAttributes): Promise<void>;
+    onTaskExecutionComplete(executionInfo: WorkerTaskExecution): Promise<void>;
+    onTaskExecutionUpdate(executionInfo: WorkerTaskExecution): Promise<void>;
 }
 
 export class SchedulerHub {
@@ -37,7 +36,7 @@ export class SchedulerHub {
         return this._instance;
     }
 
-    public async onTaskExecutionUpdate(taskExecution: IWorkerTaskExecutionAttributes) {
+    public async onTaskExecutionUpdate(taskExecution: WorkerTaskExecution) {
         if (taskExecution === null) {
             console.log("null task execution");
         }
@@ -61,7 +60,7 @@ export class SchedulerHub {
         return false;
     }
 
-    public async onTaskExecutionComplete(taskExecution: IWorkerTaskExecutionAttributes) {
+    public async onTaskExecutionComplete(taskExecution: WorkerTaskExecution) {
         try {
             const worker = this._pipelineStageWorkers.get(taskExecution.pipeline_stage_id);
 
@@ -92,27 +91,21 @@ export class SchedulerHub {
 
     private async manageAllSchedulers() {
         try {
-            if (PersistentStorageManager.Instance() && PersistentStorageManager.Instance().IsConnected) {
-                const projectsManager = PersistentStorageManager.Instance().Projects;
+            const projects: Project[] = await Project.findAll({});
 
-                const projects: IProjectAttributes[] = await projectsManager.findAll({});
+            // Turn stage workers off for projects that have been turned off.
+            const pausedProjects = projects.filter(item => (item.is_processing || 0) === 0);
 
-                const pipelineStagesManager = PersistentStorageManager.Instance().PipelineStages;
+            await Promise.all(pausedProjects.map(project => this.pauseStagesForProject(project)));
 
-                // Turn stage workers off for projects that have been turned off.
-                const pausedProjects = projects.filter(item => (item.is_processing || 0) === 0);
+            // Turn stage workers on (but not necessarily processing) for projects that are active for stats.
+            // Individual stage processing is maintained in the next step.
+            const resumedProjects = projects.filter(item => item.is_processing === true);
 
-                await Promise.all(pausedProjects.map(project => this.pauseStagesForProject(pipelineStagesManager, project)));
+            await Promise.all(resumedProjects.map(project => this.resumeStagesForProject(project)));
 
-                // Turn stage workers on (but not necessarily processing) for projects that are active for stats.
-                // Individual stage processing is maintained in the next step.
-                const resumedProjects = projects.filter(item => item.is_processing === true);
-
-                await Promise.all(resumedProjects.map(project => this.resumeStagesForProject(pipelineStagesManager, project)));
-
-                // Refresh processing state for active workers.
-                await this.manageStageProcessingFlag();
-            }
+            // Refresh processing state for active workers.
+            await this.manageStageProcessingFlag();
 
             this._pidCount++;
 
@@ -127,15 +120,15 @@ export class SchedulerHub {
         setTimeout(() => this.manageAllSchedulers(), 10 * 1000);
     }
 
-    private async resumeStagesForProject(pipelineStagesManager: any, project: IProjectAttributes) {
-        const stages: IPipelineStage[] = await pipelineStagesManager.getForProject(project.id);
+    private async resumeStagesForProject(project: Project) {
+        const stages = await project.getStages();
 
         await this.addWorker(project, startTileStatusFileWorker, "/projectPipelineSchedulerChildProcess.js");
 
         await Promise.all(stages.map(stage => this.resumeStage(stage)));
     }
 
-    private async resumeStage(stage: IPipelineStage): Promise<boolean> {
+    private async resumeStage(stage: PipelineStage): Promise<boolean> {
         if (stage.function_type !== PipelineStageMethod.MapTile) {
             return this.addWorker(stage, startAdjacentPipelineStageWorker, "/pipelineAdjacentSchedulerChildProcess.js");
         } else {
@@ -143,8 +136,8 @@ export class SchedulerHub {
         }
     }
 
-    private async pauseStagesForProject(pipelineStagesManager: any, project: IProjectAttributes) {
-        const stages: IPipelineStage[] = await pipelineStagesManager.getForProject(project.id);
+    private async pauseStagesForProject(project: Project) {
+        const stages = await project.getStages();
 
         await this.removeWorker(project);
 
@@ -158,9 +151,7 @@ export class SchedulerHub {
     }
 
     private async manageStageProcessingFlag() {
-        const pipelineStagesManager = PersistentStorageManager.Instance().PipelineStages;
-
-        const stages: IPipelineStage[] = await pipelineStagesManager.findAll({});
+        const stages = await PipelineStage.findAll({});
 
         return stages.map(stage => {
             let worker = this._pipelineStageWorkers.get(stage.id);
@@ -171,7 +162,7 @@ export class SchedulerHub {
         });
     }
 
-    private async addWorker(item: IProjectAttributes | IPipelineStage, inProcessFunction, childProcessModuleName): Promise<boolean> {
+    private async addWorker(item: Project | PipelineStage, inProcessFunction, childProcessModuleName): Promise<boolean> {
         let worker = this._pipelineStageWorkers.get(item.id);
 
         if (!worker) {
@@ -190,7 +181,7 @@ export class SchedulerHub {
         return false;
     }
 
-    private removeWorker(item: IProjectAttributes | IPipelineStage): boolean {
+    private removeWorker(item: Project | PipelineStage): boolean {
         const worker = this._pipelineStageWorkers.get(item.id);
 
         if (worker) {

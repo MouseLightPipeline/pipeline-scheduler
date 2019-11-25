@@ -7,7 +7,7 @@ const gql = require("graphql-tag");
 require("isomorphic-fetch");
 
 import {ApiServerOptions} from "../options/coreServicesOptions";
-import {IProjectInput, ProjectInputSourceState} from "../data-model/sequelize/project";
+import {IProjectInput, ProjectInputSourceState} from "../data-model/project";
 
 const debug = require("debug")("pipeline:scheduler:pipeline-api-client");
 
@@ -58,7 +58,7 @@ export class PipelineApiClient {
         const projectInput: IProjectInput = {
             id,
             input_source_state: state,
-            last_checked_input_source: (new Date()).valueOf()
+            last_checked_input_source: new Date()
         };
 
         if (state >= ProjectInputSourceState.Dashboard) {

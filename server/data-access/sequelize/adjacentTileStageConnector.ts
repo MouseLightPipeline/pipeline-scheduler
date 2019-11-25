@@ -1,17 +1,24 @@
-import {Instance, Model} from "sequelize";
+import {BuildOptions, Model, DataTypes} from "sequelize";
 
-import {generatePipelineCustomTableName, IToProcessTileAttributes, StageTableConnector} from "./stageTableConnector";
+import {generatePipelineCustomTableName, StageTableConnector, ToProcessTile} from "./stageTableConnector";
 
-export interface IAdjacentTileAttributes {
+export interface IAdjacentTile {
     relative_path: string,
     adjacent_relative_path: string;
     adjacent_tile_name: string;
-    lat_x: number;
-    lat_y: number;
-    lat_z: number;
 }
 
-export interface IAdjacentTile extends Instance<IAdjacentTileAttributes>, IAdjacentTileAttributes {
+export class AdjacentTile extends Model implements IAdjacentTile {
+    public relative_path: string;
+    public adjacent_relative_path: string;
+    public adjacent_tile_name: string;
+
+    public readonly created_at: Date;
+    public readonly updated_at: Date;
+}
+
+export type AdjacentTileStatic = typeof Model & {
+    new (values?: object, options?: BuildOptions): AdjacentTile;
 }
 
 function generatePipelineStageAdjacentTileTableName(pipelineStageId: string) {
@@ -19,17 +26,18 @@ function generatePipelineStageAdjacentTileTableName(pipelineStageId: string) {
 }
 
 export class AdjacentTileStageConnector extends StageTableConnector {
-    private _adjacentTileModel: Model<IAdjacentTile, IAdjacentTileAttributes> = null;
+    private _adjacentTileModel: AdjacentTileStatic = null;
 
-    public async loadAdjacentTile(id: string): Promise<IAdjacentTile> {
+
+    public async loadAdjacentTile(id: string): Promise<AdjacentTile> {
         return this._adjacentTileModel.findOne({where: {relative_path: id}});
     }
 
-    public async loadAdjacentTiles(): Promise<IAdjacentTile[]> {
+    public async loadAdjacentTiles(): Promise<AdjacentTile[]> {
         return this._adjacentTileModel.findAll();
     }
 
-    public async insertAdjacent(toProcess: IToProcessTileAttributes[]) {
+    public async insertAdjacent(toProcess: IAdjacentTile[]) {
         return StageTableConnector.bulkCreate(this._adjacentTileModel, toProcess);
     }
 
@@ -47,31 +55,19 @@ export class AdjacentTileStageConnector extends StageTableConnector {
         this._adjacentTileModel = this.defineAdjacentTileModel();
     }
 
-    private defineAdjacentTileModel(): any {
-        return this._connection.define(generatePipelineStageAdjacentTileTableName(this._tableBaseName), {
+    private defineAdjacentTileModel(): AdjacentTileStatic {
+        return <AdjacentTileStatic>this._connection.define(generatePipelineStageAdjacentTileTableName(this._tableBaseName), {
             relative_path: {
                 primaryKey: true,
                 unique: true,
-                type: this._connection.Sequelize.TEXT
+                type: DataTypes.TEXT
             },
             adjacent_relative_path: {
-                type: this._connection.Sequelize.TEXT,
+                type: DataTypes.TEXT,
                 defaultValue: null
             },
             adjacent_tile_name: {
-                type: this._connection.Sequelize.TEXT,
-                defaultValue: null
-            },
-            lat_x: {
-                type: this._connection.Sequelize.INTEGER,
-                defaultValue: null
-            },
-            lat_y: {
-                type: this._connection.Sequelize.INTEGER,
-                defaultValue: null
-            },
-            lat_z: {
-                type: this._connection.Sequelize.INTEGER,
+                type: DataTypes.TEXT,
                 defaultValue: null
             }
         }, {

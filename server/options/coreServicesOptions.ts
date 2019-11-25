@@ -1,8 +1,10 @@
+import {Dialect} from "sequelize";
+
 const coreServicesOptions = {
     database: {
         host: "pipeline-db",    // Default container name for when this is in a container orchestration
         port: 5432,             // Default port name for when this is in a container orchestration
-        dialect: "postgres",
+        dialect: "postgres" as Dialect,
         database: "pipeline_production",
         username: "postgres",
         password: "pgsecret",

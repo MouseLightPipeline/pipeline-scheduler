@@ -1,5 +1,5 @@
 import {ProjectPipelineScheduler} from "./projectPipelineScheduler";
-import {PersistentStorageManager} from "../data-access/sequelize/databaseConnector";
+import {Project} from "../data-model/project";
 
 const debug = require("debug")("pipeline:scheduler:tile-status-worker-process");
 
@@ -29,7 +29,7 @@ async function startWorkerForProcess(projectId) {
 
 export async function startTileStatusFileWorker(projectId: string) {
 
-    let project = await PersistentStorageManager.Instance().Projects.findById(projectId);
+    let project = await Project.findByPk(projectId);
 
     let tileStatusWorker = new ProjectPipelineScheduler(project);
 

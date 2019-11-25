@@ -1,14 +1,16 @@
-import {Instance, Model, Op, Sequelize} from "sequelize";
-import {TilePipelineStatus} from "../../../schedulers/basePipelineScheduler";
-import {
-    augmentTaskExecutionModel,
-    createTaskExecutionTable,
-    ITaskExecution,
-    ITaskExecutionAttributes,
-    ITaskExecutionModel
-} from "../../../data-model/taskExecution";
+import {BuildOptions, CountOptions, Model, Sequelize, Op} from "sequelize";
 
 const debug = require("debug")("pipeline:scheduler:stage-database-connector");
+
+import {
+    createTaskExecutionTable, ITaskExecution,
+    TaskExecution,
+    TaskExecutionStatic
+} from "../../data-model/taskExecution";
+import {TilePipelineStatus} from "../../data-model/TilePipelineStatus";
+
+const CreateChunkSize = 100;
+const UpdateChunkSize = 100;
 
 export function generatePipelineCustomTableName(pipelineStageId: string, tableName) {
     return pipelineStageId + "_" + tableName;
@@ -35,7 +37,7 @@ export interface IPipelineStageTileCounts {
     canceled: number;
 }
 
-export interface IPipelineTileAttributes {
+export interface IPipelineTile {
     relative_path?: string;
     index?: number;
     tile_name?: string;
@@ -47,56 +49,84 @@ export interface IPipelineTileAttributes {
     step_x?: number;
     step_y?: number;
     step_z?: number;
-    created_at?: Date;
-    updated_at?: Date;
+    task_executions?: TaskExecution[];
 }
 
-export interface IInProcessTileAttributes {
+export class PipelineTile extends Model implements IPipelineTile {
     relative_path: string;
-    worker_id?: string;
-    worker_last_seen?: Date;
-    task_execution_id?: string;
-    worker_task_execution_id?: string;
-    created_at?: Date;
-    updated_at?: Date;
+    index: number;
+    tile_name: string;
+    prev_stage_status: TilePipelineStatus;
+    this_stage_status: TilePipelineStatus;
+    lat_x: number;
+    lat_y: number;
+    lat_z: number;
+    step_x: number;
+    step_y: number;
+    step_z: number;
+    task_executions: TaskExecution[];
+    created_at: Date;
+    updated_at: Date;
 }
 
-export interface IToProcessTileAttributes {
+export type PipelineTileStatic = typeof Model & {
+    new(values?: object, options?: BuildOptions): PipelineTile;
+}
+
+export class IInProcessTile  {
+    public relative_path: string;
+    public worker_id: string;
+    public worker_last_seen: Date;
+    public task_execution_id: string;
+    public worker_task_execution_id: string;
+}
+
+export class InProcessTile extends Model implements IInProcessTile {
+    public relative_path: string;
+    public worker_id: string;
+    public worker_last_seen: Date;
+    public task_execution_id: string;
+    public worker_task_execution_id: string;
+
+    public readonly created_at: Date;
+    public readonly updated_at: Date;
+}
+
+export type InProcessTileStatic = typeof Model & {
+    new(values?: object, options?: BuildOptions): InProcessTile;
+}
+
+
+export interface IToProcessTile {
     relative_path: string;
-    created_at?: Date;
-    updated_at?: Date;
+    lat_x: number;
+    lat_y: number;
+    lat_z: number;
 }
 
-export interface IPipelineTile extends Instance<IPipelineTileAttributes>, IPipelineTileAttributes {
+export class ToProcessTile extends Model implements IToProcessTile {
+    public relative_path: string;
+    public lat_x: number;
+    public lat_y: number;
+    public lat_z: number;
+
+    public readonly created_at: Date;
+    public readonly updated_at: Date;
 }
 
-export interface IPipelineTileModel extends Model<IPipelineTile, IPipelineTileAttributes> {
+export type ToProcessTileStatic = typeof Model & {
+    new(values?: object, options?: BuildOptions): ToProcessTile;
 }
-
-export interface IInProcessTile extends Instance<IInProcessTileAttributes>, IInProcessTileAttributes {
-}
-
-export interface IInProcessTileModel extends Model<IInProcessTile, IInProcessTileAttributes> {
-}
-
-export interface IToProcessTile extends Instance<IToProcessTileAttributes>, IToProcessTileAttributes {
-}
-
-export interface IToProcessTileModel extends Model<IToProcessTile, IToProcessTileAttributes> {
-}
-
-const CreateChunkSize = 100;
-const UpdateChunkSize = 100;
 
 export class StageTableConnector {
 
     protected _connection: Sequelize;
     protected _tableBaseName: string;
 
-    private _tileTable: IPipelineTileModel = null;
-    private _toProcessTable: IInProcessTileModel = null;
-    private _inProcessTable: IToProcessTileModel = null;
-    private _taskExecutionTable: ITaskExecutionModel = null;
+    private _tileTable: PipelineTileStatic = null;
+    private _toProcessTable: ToProcessTileStatic = null;
+    private _inProcessTable: InProcessTileStatic = null;
+    private _taskExecutionTable: TaskExecutionStatic = null;
 
     public constructor(connection: Sequelize, id: string) {
         this._connection = connection;
@@ -106,12 +136,13 @@ export class StageTableConnector {
     public async initialize(): Promise<void> {
         this.defineTables();
 
-        await this._connection.sync();
+        // Do not perform mode/table updates from the API server, only the scheduler.
+        // this._connection.sync();
     }
 
     // -----------------------------------------------------------------------------------------------------------------
 
-    public async loadTiles(options = null): Promise<IPipelineTile[]> {
+    public async loadTiles(options = null): Promise<PipelineTile[]> {
         // TODO this is leaking sequelize specifics to callers.
         if (options) {
             return this._tileTable.findAll(options);
@@ -120,7 +151,7 @@ export class StageTableConnector {
         }
     }
 
-    public async loadTile(where: any): Promise<IPipelineTile> {
+    public async loadTile(where: any): Promise<PipelineTile> {
         return this._tileTable.findOne({where});
     }
 
@@ -128,7 +159,7 @@ export class StageTableConnector {
         return this._tileTable.findOne({where: {relative_path: id}});
     }
 
-    public async loadUnscheduled(): Promise<IPipelineTile[]> {
+    public async loadUnscheduled(): Promise<PipelineTile[]> {
         return this._tileTable.findAll({
             where: {
                 prev_stage_status: TilePipelineStatus.Complete,
@@ -137,11 +168,11 @@ export class StageTableConnector {
         });
     }
 
-    public async loadInProcess(): Promise<IInProcessTile[]> {
+    public async loadInProcess(): Promise<InProcessTile[]> {
         return this._inProcessTable.findAll();
     }
 
-    public async loadToProcess(limit: number = null): Promise<IToProcessTile[]> {
+    public async loadToProcess(limit: number = null): Promise<ToProcessTile[]> {
         return this._toProcessTable.findAll({order: [["relative_path", "ASC"]], limit: limit});
     }
 
@@ -152,21 +183,29 @@ export class StageTableConnector {
 
         await this._toProcessTable.destroy({where: {lat_z: {[Op.in]: planes}}});
 
-        await this._tileTable.update({this_stage_status: TilePipelineStatus.Incomplete}, {where: {[Op.and]: [{lat_z: {[Op.in]: planes}, this_stage_status: TilePipelineStatus.Queued}]}});
+        await this._tileTable.update({this_stage_status: TilePipelineStatus.Incomplete}, {
+            where: {
+                [Op.and]: [{
+                    lat_z: {[Op.in]: planes},
+                    this_stage_status: TilePipelineStatus.Queued
+                }]
+            }
+        });
     }
 
-    public async loadTaskExecution(id: string): Promise<ITaskExecution> {
-        return this._taskExecutionTable.findById(id);
+    public async loadTileThumbnailPath(x: number, y: number, z: number): Promise<PipelineTile> {
+        return this._tileTable.findOne({where: {lat_x: x, lat_y: y, lat_z: z}});
     }
+
+    public async loadTileStatusForPlane(zIndex: number): Promise<PipelineTile[]> {
+        return this._tileTable.findAll({where: {lat_z: zIndex}});
+    }
+
 
     // -----------------------------------------------------------------------------------------------------------------
 
-    public async countTiles(where: any): Promise<number> {
-        if (where) {
-            return this._tileTable.count(where);
-        } else {
-            return this._tileTable.count();
-        }
+    public async countTiles(options: CountOptions): Promise<number> {
+        return options ? this._tileTable.count(options) : this._tileTable.count();
     }
 
     public async countInProcess(): Promise<number> {
@@ -179,7 +218,7 @@ export class StageTableConnector {
 
     // -----------------------------------------------------------------------------------------------------------------
 
-    public async insertTiles(tiles: IPipelineTileAttributes[]) {
+    public async insertTiles(tiles: IPipelineTile[]) {
         return StageTableConnector.bulkCreate(this._tileTable, tiles);
     }
 
@@ -215,13 +254,75 @@ export class StageTableConnector {
         if (!toDelete || toDelete.length === 0) {
             return;
         }
-
-        return this._tileTable.destroy({where: {relative_path: {$in: toDelete}}});
     }
 
     // -----------------------------------------------------------------------------------------------------------------
 
-    public async insertToProcess(toProcess: IToProcessTileAttributes[]) {
+    public async getTileCounts(): Promise<IPipelineStageTileCounts> {
+        const incomplete = await this._tileTable.count({where: {this_stage_status: TilePipelineStatus.Incomplete}});
+        const queued = await this._tileTable.count({where: {this_stage_status: TilePipelineStatus.Queued}});
+        const processing = await this._tileTable.count({where: {this_stage_status: TilePipelineStatus.Processing}});
+        const complete = await this._tileTable.count({where: {this_stage_status: TilePipelineStatus.Complete}});
+        const failed = await this._tileTable.count({where: {this_stage_status: TilePipelineStatus.Failed}});
+        const canceled = await this._tileTable.count({where: {this_stage_status: TilePipelineStatus.Canceled}});
+
+        return {
+            incomplete,
+            queued,
+            processing,
+            complete,
+            failed,
+            canceled
+        }
+    }
+
+    public async setTileStatus(tileIds: string[], status: TilePipelineStatus): Promise<PipelineTile[]> {
+        const [affectedCount, affectedRows] = await this._tileTable.update({this_stage_status: status}, {
+            where: {relative_path: {[Op.in]: tileIds}},
+            returning: true
+        });
+
+        return affectedRows;
+    }
+
+    public async convertTileStatus(currentStatus: TilePipelineStatus, desiredStatus: TilePipelineStatus): Promise<PipelineTile[]> {
+        const [affectedCount, affectedRows] = await this._tileTable.update({this_stage_status: desiredStatus}, {
+            where: {this_stage_status: currentStatus},
+            returning: true
+        });
+
+        return affectedRows;
+    }
+
+    public async taskExecutionsForTile(id: string): Promise<TaskExecution[]> {
+        return this._taskExecutionTable.findAll({where: {tile_id: id}, order: ["created_at"]});
+    }
+
+    public async taskExecutionForId(id: string): Promise<TaskExecution> {
+        return this._taskExecutionTable.findByPk(id);
+    }
+
+    public async loadTaskExecution(id: string): Promise<TaskExecution> {
+        return this._taskExecutionTable.findByPk(id);
+    }
+
+    public async removeTaskExecution(id: string): Promise<boolean> {
+        try {
+            const taskExecution = await this.taskExecutionForId(id);
+
+            if (taskExecution != null) {
+                await taskExecution.destroy();
+                return true;
+            }
+        } catch {
+        }
+
+        return false;
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------
+
+    public async insertToProcess(toProcess: IToProcessTile[]) {
         return StageTableConnector.bulkCreate(this._toProcessTable, toProcess);
     }
 
@@ -233,7 +334,7 @@ export class StageTableConnector {
         return this._toProcessTable.destroy({where: {relative_path: {$in: toDelete}}});
     }
 
-    public async deleteToProcessTile(toProcess: IToProcessTileAttributes) {
+    public async deleteToProcessTile(toProcess: ToProcessTile) {
         if (!toProcess) {
             return;
         }
@@ -243,7 +344,7 @@ export class StageTableConnector {
 
     // -----------------------------------------------------------------------------------------------------------------
 
-    public async insertInProcessTile(inProcess: IInProcessTileAttributes) {
+    public async insertInProcessTile(inProcess: IInProcessTile) {
         return this._inProcessTable.create(inProcess);
     }
 
@@ -255,9 +356,10 @@ export class StageTableConnector {
         return this._inProcessTable.destroy({where: {relative_path: {$in: toDelete}}});
     }
 
+
     // -----------------------------------------------------------------------------------------------------------------
 
-    public async createTaskExecution(task: ITaskExecutionAttributes): Promise<ITaskExecution> {
+    public async createTaskExecution(task: ITaskExecution): Promise<TaskExecution> {
         return this._taskExecutionTable.create(task);
     };
 
@@ -300,11 +402,10 @@ export class StageTableConnector {
         this._inProcessTable = this.defineInProcessTable(this._connection.Sequelize);
 
         this._taskExecutionTable = createTaskExecutionTable(this._connection, generatePipelineStageTaskExecutionTableName(this._tableBaseName));
-        augmentTaskExecutionModel(this._taskExecutionTable);
     }
 
-    private defineTileTable(DataTypes): any {
-        return this._connection.define(this._tableBaseName, {
+    private defineTileTable(DataTypes): PipelineTileStatic {
+        return <PipelineTileStatic>this._connection.define(this._tableBaseName, {
             relative_path: {
                 primaryKey: true,
                 unique: true,

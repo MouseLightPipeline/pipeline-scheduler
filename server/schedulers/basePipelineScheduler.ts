@@ -3,25 +3,26 @@ import * as _ from "lodash";
 const debug = require("debug")("pipeline:scheduler:base-pipeline-scheduler");
 
 import {ISchedulerInterface} from "./schedulerHub";
-import {IProject} from "../data-model/sequelize/project";
+import {Project} from "../data-model/project";
 import {
     CompletionResult,
-    ExecutionStatus,
-    ITaskExecutionAttributes,
-    IWorkerTaskExecutionAttributes
+    ExecutionStatus, ITaskExecution,
+    TaskExecution
 } from "../data-model/taskExecution";
 import {
     connectorForProject,
     ProjectDatabaseConnector
-} from "../data-access/sequelize/project-connectors/projectDatabaseConnector";
+} from "../data-access/sequelize/projectDatabaseConnector";
 import {
-    IPipelineTile, IPipelineTileAttributes, IToProcessTileAttributes,
-    StageTableConnector
-} from "../data-access/sequelize/project-connectors/stageTableConnector";
-import {ITaskArgument, ITaskDefinition, TaskArgumentType} from "../data-model/sequelize/taskDefinition";
-import {IPipelineWorker} from "../data-model/sequelize/pipelineWorker";
-import {IPipelineStage} from "../data-model/sequelize/pipelineStage";
-import {PersistentStorageManager} from "../data-access/sequelize/databaseConnector";
+    IPipelineTile, IToProcessTile,
+    PipelineTile,
+    StageTableConnector,
+    ToProcessTile
+} from "../data-access/sequelize/stageTableConnector";
+import {PipelineWorker} from "../data-model/pipelineWorker";
+import {PipelineStage} from "../data-model/pipelineStage";
+import {WorkerTaskExecution} from "../data-model/workerTaskExecution";
+import {ITaskArgument, TaskArgumentType, TaskDefinition} from "../data-model/taskDefinition";
 
 export const DefaultPipelineIdKey = "relative_path";
 
@@ -40,9 +41,9 @@ export enum TilePipelineStatus {
 }
 
 export interface IMuxTileLists {
-    toInsert: IPipelineTileAttributes[],
-    toUpdate: IPipelineTile[],
-    toReset: IPipelineTile[],
+    toInsert: IPipelineTile[],
+    toUpdate: PipelineTile[],
+    toReset: PipelineTile[],
     toDelete: string[]
 }
 
@@ -60,7 +61,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
 
     private _isInitialized: boolean = false;
 
-    protected constructor(project: IProject, source: IProject | IPipelineStage) {
+    protected constructor(project: Project, source: Project | PipelineStage) {
         this._projectId = project.id;
         this._sourceId = source.id;
 
@@ -86,11 +87,11 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         return this._isProcessingRequested;
     }
 
-    public async getProject(): Promise<IProject> {
-        return await PersistentStorageManager.Instance().Projects.findById(this._projectId);
+    public async getProject(): Promise<Project> {
+        return Project.findByPk(this._projectId);
     }
 
-    public abstract async getSource(): Promise<IProject | IPipelineStage>;
+    public abstract async getSource(): Promise<Project | PipelineStage>;
 
     public async run(): Promise<void> {
         if (this._isInitialized) {
@@ -111,7 +112,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
 
         const source = await this.getSource();
 
-        let toProcessInsert: IToProcessTileAttributes[] = [];
+        let toProcessInsert: IToProcessTile[] = [];
 
         let unscheduled = await this._outputStageConnector.loadUnscheduled();
 
@@ -182,9 +183,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
                     relative_path: obj.relative_path,
                     lat_x: obj.lat_x,
                     lat_y: obj.lat_y,
-                    lat_z: obj.lat_z,
-                    created_at: now,
-                    updated_at: now
+                    lat_z: obj.lat_z
                 };
             });
 
@@ -204,7 +203,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         return toProcessInsert.length > 0;
     }
 
-    public async onTaskExecutionUpdate(executionInfo: IWorkerTaskExecutionAttributes): Promise<void> {
+    public async onTaskExecutionUpdate(executionInfo: WorkerTaskExecution): Promise<void> {
         const localTaskExecution = await this._outputStageConnector.loadTaskExecution(executionInfo.remote_task_execution_id);
 
         if (localTaskExecution == null || localTaskExecution.execution_status_code > ExecutionStatus.Running) {
@@ -229,7 +228,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         await localTaskExecution.update(update);
     }
 
-    public async onTaskExecutionComplete(executionInfo: IWorkerTaskExecutionAttributes): Promise<void> {
+    public async onTaskExecutionComplete(executionInfo: WorkerTaskExecution): Promise<void> {
         const localTaskExecution = await this._outputStageConnector.loadTaskExecution(executionInfo.remote_task_execution_id);
 
         if (localTaskExecution == null) {
@@ -296,7 +295,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
      * @param {IPipelineTileAttributes} tile
      * @returns {Promise<any>}
      */
-    protected async getTaskContext(tile: IPipelineTileAttributes): Promise<any> {
+    protected async getTaskContext(tile: PipelineTile): Promise<any> {
         return null;
     }
 
@@ -304,7 +303,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         return userParameters.has(valueLowerCase) ? userParameters.get(valueLowerCase) : null;
     }
 
-    protected mapTaskArgumentParameter(project: IProject, valueLowerCase: string, task: ITaskDefinition, taskExecution: ITaskExecutionAttributes, worker: IPipelineWorker, tile: IPipelineTileAttributes, context: any): string {
+    protected mapTaskArgumentParameter(project: Project, valueLowerCase: string, task: TaskDefinition, taskExecution: ITaskExecution, worker: PipelineWorker, tile: PipelineTile, context: any): string {
         switch (valueLowerCase) {
             case "project_name":
                 return project.name;
@@ -335,8 +334,8 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         return null;
     }
 
-    protected mapTaskArguments(project: IProject, task: ITaskDefinition, taskExecution: ITaskExecutionAttributes, worker: IPipelineWorker, tile: IPipelineTileAttributes, context: any): string[] {
-        const scriptsArgs: ITaskArgument[] = task.user_arguments;
+    protected mapTaskArguments(project: Project, task: TaskDefinition, taskExecution: ITaskExecution, worker: PipelineWorker, tile: PipelineTile, context: any): string[] {
+        const scriptsArgs: ITaskArgument[] = JSON.parse(task.script_args).arguments;
 
         if (scriptsArgs.length === 0) {
             return [];
@@ -368,7 +367,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         });
     }
 
-    protected async muxInputOutputTiles(project: IProject, knownInput, knownOutput: IPipelineTile[]): Promise<IMuxTileLists> {
+    protected async muxInputOutputTiles(project: Project, knownInput, knownOutput: PipelineTile[]): Promise<IMuxTileLists> {
         return {
             toInsert: [],
             toUpdate: [],
@@ -377,7 +376,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         };
     }
 
-    protected async refreshWithKnownInput(knownInput: any[]) {
+    protected async refreshWithKnownInput(knownInput: IPipelineTile[]) {
         const project = await this.getProject();
 
         const source = await this.getSource();

@@ -1,5 +1,3 @@
-const {performance} = require("perf_hooks");
-
 const fse = require("fs-extra");
 const path = require("path");
 import * as _ from "lodash";
@@ -14,16 +12,12 @@ const tileStatusLastJsonFile = tileStatusJsonFile + ".last";
 import {
     BasePipelineScheduler, DefaultPipelineIdKey, TilePipelineStatus, IMuxTileLists
 } from "./basePipelineScheduler";
-import {IProject, IProjectAttributes, ProjectInputSourceState} from "../data-model/sequelize/project";
-import {
-    IPipelineTile, IPipelineTileAttributes,
-    StageTableConnector
-} from "../data-access/sequelize/project-connectors/stageTableConnector";
-import {isNullOrUndefined} from "util";
-import {ProjectDatabaseConnector} from "../data-access/sequelize/project-connectors/projectDatabaseConnector";
+import {Project, ProjectInputSourceState} from "../data-model/project";
+import {IPipelineTile, PipelineTile, StageTableConnector} from "../data-access/sequelize/stageTableConnector";
+import {ProjectDatabaseConnector} from "../data-access/sequelize/projectDatabaseConnector";
 import {ServiceOptions} from "../options/serverOptions";
 import {PipelineApiClient} from "../graphql/pipelineApiClient";
-import {IPipelineStage} from "../data-model/sequelize/pipelineStage";
+import {PipelineStage} from "../data-model/pipelineStage";
 
 interface IPosition {
     x: number;
@@ -53,7 +47,7 @@ interface IDashboardJsonTile {
 
 export class ProjectPipelineScheduler extends BasePipelineScheduler {
 
-    public constructor(project: IProject) {
+    public constructor(project: Project) {
         super(project, project);
 
         this.IsExitRequested = false;
@@ -61,12 +55,12 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
         this.IsProcessingRequested = true;
     }
 
-    public async getSource(): Promise<IProject | IPipelineStage> {
+    public async getSource(): Promise<Project | PipelineStage> {
         return this.getProject();
     }
 
     protected async createOutputStageConnector(connector: ProjectDatabaseConnector): Promise<StageTableConnector> {
-        return await connector.connectorForProject(await this.getProject());
+        return await connector.connectorForProject();
     }
 
     protected async refreshTileStatus(): Promise<boolean> {
@@ -75,14 +69,14 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
 
         debug(`pipeline input update for project ${project.name}`);
 
-        const knownInput = await this.performJsonUpdate(project);
+        const knownInput: IPipelineTile[] = await this.performJsonUpdate(project);
 
         await this.refreshWithKnownInput(knownInput);
 
         return true;
     }
 
-    protected async muxInputOutputTiles(project: IProject, knownInput: IPipelineTileAttributes[], knownOutput: IPipelineTile[]): Promise<IMuxTileLists> {
+    protected async muxInputOutputTiles(project: Project, knownInput: PipelineTile[], knownOutput: PipelineTile[]): Promise<IMuxTileLists> {
         const sorted: IMuxTileLists = {
             toInsert: [],
             toUpdate: [],
@@ -95,9 +89,9 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
             return;
         }
 
-        const toInsert: IPipelineTileAttributes[] = _.differenceBy(knownInput, knownOutput, DefaultPipelineIdKey);
+        const toInsert: PipelineTile[] = _.differenceBy(knownInput, knownOutput, DefaultPipelineIdKey);
 
-        const toUpdate: IPipelineTileAttributes[] = _.intersectionBy(knownInput, knownOutput, DefaultPipelineIdKey);
+        const toUpdate: PipelineTile[] = _.intersectionBy(knownInput, knownOutput, DefaultPipelineIdKey);
 
         sorted.toDelete = _.differenceBy(knownOutput, knownInput, DefaultPipelineIdKey).map(t => t.relative_path);
 
@@ -113,11 +107,11 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
             });
         });
 
-        const existingTilePaths = new Map<string, IPipelineTile>();
+        const existingTilePaths = new Map<string, PipelineTile>();
 
         knownOutput.map(t => existingTilePaths.set(t.relative_path, t));
 
-        sorted.toUpdate = toUpdate.map<IPipelineTile>((inputTile: IPipelineTileAttributes) => {
+        sorted.toUpdate = toUpdate.map<PipelineTile>((inputTile: PipelineTile) => {
             const existingTile = existingTilePaths.get(inputTile.relative_path);
 
             if (existingTile === null) {
@@ -147,7 +141,7 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
         return sorted;
     }
 
-    private async performJsonUpdate(project: IProject): Promise<IPipelineTileAttributes[]> {
+    private async performJsonUpdate(project: Project): Promise<IPipelineTile[]> {
         let root = project.root_path;
 
         ServiceOptions.driveMapping.map(d => {
@@ -179,13 +173,9 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
             await PipelineApiClient.Instance().updateProject(project.id, ProjectInputSourceState.Pipeline);
         }
 
-        let projectUpdate: IProjectAttributes = {
-            id: project.id
-        };
+        let tiles: IPipelineTile[];
 
-        let tiles: IProjectAttributes[];
-
-        [projectUpdate, tiles] = await this.parsePipelineInput(project, dataFile, projectUpdate);
+        [, tiles] = await this.parsePipelineInput(project, dataFile, project);
 
         let outputFile = path.join(root, tileStatusJsonFile);
 
@@ -204,12 +194,12 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
         return tiles;
     }
 
-    private async parsePipelineInput(project: IProject, dataFile: string, projectUpdate: IProjectAttributes): Promise<[IProjectAttributes, IPipelineTileAttributes[]]> {
+    private async parsePipelineInput(project: Project, dataFile: string, projectUpdate: Project): Promise<[Project, IPipelineTile[]]> {
         let contents = fse.readFileSync(dataFile);
 
         let jsonContent = JSON.parse(contents);
 
-        if (!isNullOrUndefined(jsonContent.pipelineFormat)) {
+        if (jsonContent.pipelineFormat != null) {
             // Pipeline-specific input format.
             return this.parsePipelineDefaultInput(project, jsonContent, projectUpdate);
         } else {
@@ -218,8 +208,8 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
         }
     }
 
-    private async parsePipelineDefaultInput(project: IProject, jsonContent: any, projectUpdate: IProjectAttributes): Promise<[IProjectAttributes, IPipelineTileAttributes[]]> {
-        let tiles: IPipelineTileAttributes[] = [];
+    private async parsePipelineDefaultInput(project: Project, jsonContent: any, projectUpdate: Project): Promise<[Project, IPipelineTile[]]> {
+        let tiles: IPipelineTile[] = [];
 
         if (jsonContent.extents != null) {
             projectUpdate.sample_x_min = jsonContent.extents.minimumX;
@@ -253,7 +243,7 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
 
             tiles.push({
                 relative_path: normalizedPath,
-                index: isNullOrUndefined(tile.id) ? null : tile.id,
+                index: tile.id == null ? null : tile.id,
                 tile_name: tileName || "",
                 prev_stage_status: tile.isComplete ? TilePipelineStatus.Complete : TilePipelineStatus.Incomplete,
                 this_stage_status: tile.isComplete ? TilePipelineStatus.Complete : TilePipelineStatus.Incomplete,
@@ -269,8 +259,8 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
         return [projectUpdate, tiles];
     }
 
-    private async parseDashboardInput(project: IProject, jsonContent: any, projectUpdate: IProjectAttributes): Promise<[IProjectAttributes, IPipelineTileAttributes[]]> {
-        let tiles: IPipelineTileAttributes[] = [];
+    private async parseDashboardInput(project: Project, jsonContent: any, projectUpdate: Project): Promise<[Project, IPipelineTile[]]> {
+        let tiles: IPipelineTile[] = [];
 
         if (jsonContent.monitor.extents) {
             projectUpdate.sample_x_min = jsonContent.monitor.extents.minimumX;
@@ -301,7 +291,7 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
 
                     tiles.push({
                         relative_path: normalizedPath,
-                        index: isNullOrUndefined(tile.id) ? null : tile.id,
+                        index: tile.id == null ? null : tile.id,
                         tile_name: tileName || "",
                         prev_stage_status: tile.isComplete ? TilePipelineStatus.Complete : TilePipelineStatus.Incomplete,
                         this_stage_status: tile.isComplete ? TilePipelineStatus.Complete : TilePipelineStatus.Incomplete,
@@ -320,6 +310,6 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
     }
 }
 
-function tileEqual(a: IPipelineTileAttributes, b: IPipelineTileAttributes) {
+function tileEqual(a: PipelineTile, b: PipelineTile) {
     return a.prev_stage_status === b.this_stage_status && a.lat_z === b.lat_z && a.step_z === b.step_z;
 }

@@ -1,9 +1,10 @@
-import {PersistentStorageManager} from "../sequelize/databaseConnector";
+import {PipelineWorker} from "../../data-model/pipelineWorker";
 
 const Influx = require("influx");
 
 import {MetricsOptions} from "../../options/coreServicesOptions";
-import {ITaskExecutionAttributes} from "../../data-model/taskExecution";
+import {TaskExecution} from "../../data-model/taskExecution";
+import {WorkerTaskExecution} from "../../data-model/workerTaskExecution";
 
 const debug = require("debug")("pipeline:coordinator-api:metrics-database");
 
@@ -25,7 +26,7 @@ export class MetricsConnector {
         this.createTaskExecutionConnection();
     }
 
-    public async writeTaskExecution(taskExecution: ITaskExecutionAttributes) {
+    public async writeTaskExecution(taskExecution: TaskExecution | WorkerTaskExecution) {
         try {
             if (this.taskExecutionDatabase) {
                 const duration_minutes = taskExecution.completed_at && taskExecution.started_at ? (taskExecution.completed_at.valueOf() - taskExecution.started_at.valueOf()) / 60000 : null;
@@ -49,7 +50,7 @@ export class MetricsConnector {
                         measurement: "task_execution",
                         tags: {
                             worker_id: taskExecution.worker_id,
-                            worker_name: (await PersistentStorageManager.Instance().getPipelineWorker(taskExecution.worker_id)).name,
+                            worker_name: (await PipelineWorker.getForWorkerId(taskExecution.worker_id)).name,
                             task_id: taskExecution.task_definition_id,
                             pipeline_stage_id: taskExecution.pipeline_stage_id
                         },

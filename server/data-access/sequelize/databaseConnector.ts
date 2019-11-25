@@ -1,113 +1,72 @@
 import * as path from "path";
-const Sequelize = require("sequelize");
+const fs = require("fs");
+import {Sequelize, Options} from "sequelize";
 
-const debug = require("debug")("pipeline:scheduler:database-connector");
+const debug = require("debug")("pipeline:pipeline-api:database-connector");
 
-import {loadModels} from "./modelLoader";
-import {SequelizeOptions} from "../../options/coreServicesOptions";
-import {IProjectModel} from "../../data-model/sequelize/project";
-import {ITaskDefinitionModel} from "../../data-model/sequelize/taskDefinition";
-import {IPipelineWorker} from "../../data-model/sequelize/pipelineWorker";
+import { SequelizeOptions} from "../../options/coreServicesOptions";
 
-export interface IPipelineModels {
-    TaskDefinitions?: ITaskDefinitionModel;
-    TaskRepositories?: any;
-    PipelineWorkers?: any;
-    Projects?: IProjectModel;
-    PipelineStages?: any;
-    PipelineStagePerformances?: any;
-}
-
-export interface ISequelizeDatabase<T> {
-    connection: any;
-    models: T;
-    isConnected: boolean;
-}
-
-export class PersistentStorageManager {
-
-    private pipelineDatabase: ISequelizeDatabase<IPipelineModels>;
-
-    public static Instance(): PersistentStorageManager {
-        return _manager;
+export class RemoteDatabaseClient {
+    public static async Start(options: Options = SequelizeOptions): Promise<RemoteDatabaseClient> {
+        const client = new RemoteDatabaseClient(options);
+        await client.start();
+        return client;
     }
 
-    public get IsConnected() {
-        return this.pipelineDatabase && this.pipelineDatabase.isConnected;
+    private _connection: Sequelize;
+    private readonly _options: Options;
+
+    private constructor(options: Options) {
+        this._options = options;
     }
 
-    public get TaskRepositories() {
-        return this.pipelineDatabase.models.TaskRepositories;
+    private async start() {
+        this.createConnection(this._options);
+        await this.authenticate("pipeline");
     }
 
-    public get TaskDefinitions() {
-        return this.pipelineDatabase.models.TaskDefinitions;
+    private createConnection(options: Options) {
+        this._connection = new Sequelize(options.database, options.username, options.password, options);
+
+        this.loadModels(path.normalize(path.join(__dirname, "..", "..", "data-model", "sequelize")));
     }
 
-    public get PipelineWorkers() {
-        return this.pipelineDatabase.models.PipelineWorkers;
+    private async authenticate(name: string) {
+        try {
+            await this._connection.authenticate();
+
+            debug(`successful database connection: ${name}`);
+
+        } catch (err) {
+            if (err.name === "SequelizeConnectionRefusedError") {
+                debug(`failed database connection: ${name} (connection refused - is it running?) - delaying 5 seconds`);
+            } else {
+                debug(`failed database connection: ${name} - delaying 5 seconds`);
+                debug(err);
+            }
+
+            setTimeout(() => this.authenticate(name), 5000);
+        }
     }
 
-    public get Projects() {
-        return this.pipelineDatabase.models.Projects;
-    }
+    private loadModels(modelLocation: string) {
+        const modules = [];
 
-    public get PipelineStages() {
-        return this.pipelineDatabase.models.PipelineStages;
-    }
+        fs.readdirSync(modelLocation).filter(file => {
+            return (file.indexOf(".") !== 0) && (file.slice(-3) === ".js");
+        }).forEach(file => {
+            let modelModule = require(path.join(modelLocation, file.slice(0, -3)));
 
-    public get PipelineStagePerformances() {
-        return this.pipelineDatabase.models.PipelineStagePerformances;
-    }
-
-    public async initialize() {
-        this.pipelineDatabase = await createConnection({});
-        await authenticate(this.pipelineDatabase, "pipeline");
-    }
-
-    public getPipelineWorker(id: string): Promise<IPipelineWorker> {
-        return this.PipelineWorkers.findById(id);
-    }
-
-    public getPipelineWorkers(): Promise<IPipelineWorker[]> {
-        return this.PipelineWorkers.findAll({});
-    }
-}
-
-async function authenticate(database, name) {
-    try {
-        await database.connection.authenticate();
-
-        database.isConnected = true;
-
-        debug(`successful database connection: ${name}`);
-
-        Object.keys(database.models).map(modelName => {
-            if (database.models[modelName].prepareContents) {
-                database.models[modelName].prepareContents(database.models);
+            if (modelModule.modelInit != null) {
+                modelModule.modelInit(this._connection);
+                modules.push(modelModule);
             }
         });
-    } catch (err) {
-        debug(`failed database connection: ${name}`);
-        debug(err);
 
-        setTimeout(() => authenticate(database, name), 5000);
+        modules.forEach(modelModule => {
+            if (modelModule.modelAssociate != null) {
+                modelModule.modelAssociate();
+            }
+        });
     }
 }
-
-async function createConnection<T>(models: T) {
-    let db: ISequelizeDatabase<T> = {
-        connection: null,
-        models: models,
-        isConnected: false
-    };
-
-    db.connection = new Sequelize(SequelizeOptions.database, SequelizeOptions.username, SequelizeOptions.password, SequelizeOptions);
-
-    return await loadModels(db, path.normalize(path.join(__dirname, "..", "..", "data-model", "sequelize")));
-}
-
-const _manager: PersistentStorageManager = new PersistentStorageManager();
-
-_manager.initialize().then(() => {
-});

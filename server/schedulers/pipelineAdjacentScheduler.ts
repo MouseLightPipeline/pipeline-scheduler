@@ -5,20 +5,22 @@ import {
     DefaultPipelineIdKey,
     IMuxTileLists
 } from "./basePipelineScheduler";
-import {IPipelineStage, PipelineStageMethod} from "../data-model/sequelize/pipelineStage";
-import {IPipelineTile, IPipelineTileAttributes} from "../data-access/sequelize/project-connectors/stageTableConnector";
 import {StagePipelineScheduler} from "./stagePipelineScheduler";
 import {
-    AdjacentTileStageConnector, IAdjacentTile,
-    IAdjacentTileAttributes
-} from "../data-access/sequelize/project-connectors/adjacentTileStageConnector";
-import {IProject} from "../data-model/sequelize/project";
-import {IPipelineWorker} from "../data-model/sequelize/pipelineWorker";
-import {ITaskDefinition} from "../data-model/sequelize/taskDefinition";
-import {ITaskExecutionAttributes} from "../data-model/taskExecution";
+    AdjacentTile,
+    AdjacentTileStageConnector,
+    IAdjacentTile
+} from "../data-access/sequelize/adjacentTileStageConnector";
+import {Project} from "../data-model/project";
+import {PipelineStage, PipelineStageMethod} from "../data-model/pipelineStage";
+import {PipelineTile} from "../data-access/sequelize/stageTableConnector";
+import {TaskDefinition} from "../data-model/taskDefinition";
+import {TaskExecution} from "../data-model/taskExecution";
+import {PipelineWorker} from "../data-model/pipelineWorker";
+
 
 interface IMuxUpdateLists extends IMuxTileLists {
-    toInsertAdjacentMapIndex: IAdjacentTileAttributes[];
+    toInsertAdjacentMapIndex: IAdjacentTile[];
     toDeleteAdjacentMapIndex: string[];
 }
 
@@ -26,7 +28,7 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
 
     private _adjacentTileDelta: number = 1;
 
-    public constructor(pipelineStage: IPipelineStage, project: IProject) {
+    public constructor(pipelineStage: PipelineStage, project: Project) {
         super(pipelineStage, project);
     }
 
@@ -38,11 +40,11 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
         return this._outputStageConnector as AdjacentTileStageConnector;
     }
 
-    protected async getTaskContext(tile: IPipelineTileAttributes): Promise<IAdjacentTile> {
+    protected async getTaskContext(tile: PipelineTile): Promise<AdjacentTile> {
         return this.OutputStageConnector.loadAdjacentTile(tile.relative_path);
     }
 
-    protected mapTaskArgumentParameter(project: IProject, valueLowerCase: string, task: ITaskDefinition, taskExecution: ITaskExecutionAttributes, worker: IPipelineWorker, tile: IPipelineTileAttributes, context: IAdjacentTile): string {
+    protected mapTaskArgumentParameter(project: Project, valueLowerCase: string, task: TaskDefinition, taskExecution: TaskExecution, worker: PipelineWorker, tile: PipelineTile, context: AdjacentTile): string {
         if (context !== null) {
             switch (valueLowerCase) {
                 case "adjacent_tile_relative_path":
@@ -55,7 +57,7 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
         return super.mapTaskArgumentParameter(project, valueLowerCase, task, taskExecution, worker, tile, context);
     }
 
-    private async findAdjacentLayerTile(project: IProject, inputTile: IPipelineTileAttributes): Promise<IPipelineTile> {
+    private async findAdjacentLayerTile(project: Project, inputTile: PipelineTile): Promise<PipelineTile> {
         let where = null;
         switch (this._pipelineStage.function_type) {
             case PipelineStageMethod.XAdjacentTileComparison:
@@ -94,7 +96,7 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
         return where ? await this._inputStageConnector.loadTile(where) : null;
     }
 
-    protected async muxInputOutputTiles(project: IProject, knownInput: IPipelineTile[], knownOutput: IPipelineTile[]) {
+    protected async muxInputOutputTiles(project: Project, knownInput: PipelineTile[], knownOutput: PipelineTile[]) {
         const muxUpdateLists: IMuxUpdateLists = {
             toInsert: [],
             toUpdate: [],
@@ -138,7 +140,7 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
         return muxUpdateLists;
     }
 
-    private async updateAdjacentTile(project: IProject, inputTile: IPipelineTile, knownInputIdLookup, knownOutputIdLookup, nextLayerMapIdLookup, toDelete: string[], muxUpdateLists: IMuxUpdateLists): Promise<void> {
+    private async updateAdjacentTile(project: Project, inputTile: PipelineTile, knownInputIdLookup, knownOutputIdLookup, nextLayerMapIdLookup, toDelete: string[], muxUpdateLists: IMuxUpdateLists): Promise<void> {
         // If the source tile is now in a skip plane, remove and do not remap.
         if (_.includes(project.zPlaneSkipIndices, inputTile.lat_z) || _.includes(toDelete, inputTile.relative_path)) {
             muxUpdateLists.toDeleteAdjacentMapIndex.push(inputTile.relative_path);
@@ -265,9 +267,7 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
                     lat_z: inputTile.lat_z,
                     step_x: inputTile.step_x,
                     step_y: inputTile.step_y,
-                    step_z: inputTile.step_z,
-                    created_at: now,
-                    updated_at: now
+                    step_z: inputTile.step_z
                 }
             );
         }

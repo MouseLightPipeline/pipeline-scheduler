@@ -1,6 +1,6 @@
 import {PipelineAdjacentScheduler} from "./pipelineAdjacentScheduler";
-import {PersistentStorageManager} from "../data-access/sequelize/databaseConnector";
-import {IPipelineStage} from "../data-model/sequelize/pipelineStage";
+import {PipelineStage} from "../data-model/pipelineStage";
+import {Project} from "../data-model/project";
 
 const debug = require("debug")("pipeline:scheduler:pipeline-z-comparison-worker-process");
 
@@ -34,10 +34,10 @@ export async function startAdjacentPipelineStageWorker(stageId) {
     let pipelineWorker = null;
 
     try {
-        let stage: IPipelineStage = await PersistentStorageManager.Instance().PipelineStages.findById(stageId);
+        let stage: PipelineStage = await PipelineStage.findByPk(stageId);
 
         if (stage) {
-            let project = await PersistentStorageManager.Instance().Projects.findById(stage.project_id);
+            let project = await Project.findByPk(stage.project_id);
 
             pipelineWorker = new PipelineAdjacentScheduler(stage, project);
 

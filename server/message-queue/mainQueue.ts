@@ -2,7 +2,7 @@ import * as amqp from "amqplib";
 
 import {MessageQueueOptions} from "../options/coreServicesOptions";
 import {Connection, Channel} from "amqplib";
-import {IWorkerTaskExecutionAttributes} from "../data-model/taskExecution";
+import {WorkerTaskExecution} from "../data-model/workerTaskExecution";
 import {SchedulerHub} from "../schedulers/schedulerHub";
 import {MetricsConnector} from "../data-access/metrics/metricsConnector";
 
@@ -56,7 +56,7 @@ export class MainQueue {
                 try {
                     const taskExecution = JSON.parse(msg.content.toString());
 
-                    const taskExecution2: IWorkerTaskExecutionAttributes = Object.assign({}, taskExecution, {
+                    const taskExecution2: WorkerTaskExecution = Object.assign({}, taskExecution, {
                         submitted_at: new Date(taskExecution.submitted_at),
                         started_at: new Date(taskExecution.started_at),
                         completed_at: new Date(taskExecution.completed_at)
@@ -75,7 +75,7 @@ export class MainQueue {
             await this.channel.consume(TaskExecutionUpdateQueue, async (msg) => {
                 try {
                     const taskExecution = JSON.parse(msg.content.toString());
-                    const taskExecution2: IWorkerTaskExecutionAttributes = Object.assign({}, taskExecution, {
+                    const taskExecution2: WorkerTaskExecution = Object.assign({}, taskExecution, {
                         submitted_at: new Date(taskExecution.submitted_at),
                         started_at: new Date(taskExecution.started_at),
                         completed_at: new Date(taskExecution.completed_at)
@@ -100,13 +100,13 @@ export class MainQueue {
         }
     }
 
-    private async handleOneCompleteMessage(taskExecution: IWorkerTaskExecutionAttributes) {
+    private async handleOneCompleteMessage(taskExecution: WorkerTaskExecution) {
         return new Promise((resolve) => {
             return this.acknowledgeCompleteMessage(taskExecution, resolve);
         });
     }
 
-    private async acknowledgeCompleteMessage(taskExecution: IWorkerTaskExecutionAttributes, resolve) {
+    private async acknowledgeCompleteMessage(taskExecution: WorkerTaskExecution, resolve) {
         const ack = await SchedulerHub.Instance.onTaskExecutionComplete(taskExecution);
 
         if (ack) {
@@ -126,13 +126,13 @@ export class MainQueue {
         return false;
     }
 
-    private async handleOneUpdateMessage(taskExecution: IWorkerTaskExecutionAttributes) {
+    private async handleOneUpdateMessage(taskExecution: WorkerTaskExecution) {
         return new Promise((resolve) => {
             return this.acknowledgeUpdateMessage(taskExecution, resolve);
         });
     }
 
-    private async acknowledgeUpdateMessage(taskExecution: IWorkerTaskExecutionAttributes, resolve) {
+    private async acknowledgeUpdateMessage(taskExecution: WorkerTaskExecution, resolve) {
         debug("acknowledge update message");
         const ack = await SchedulerHub.Instance.onTaskExecutionUpdate(taskExecution);
 

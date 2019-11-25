@@ -1,9 +1,8 @@
-import {FindOptions, Instance, Model, Sequelize} from "sequelize";
+import {Sequelize, Model, DataTypes, BuildOptions} from "sequelize";
 import * as uuid from "uuid";
 
-import {isNullOrUndefined} from "util";
-import {IPipelineWorker} from "./sequelize/pipelineWorker";
-import {ITaskDefinition} from "./sequelize/taskDefinition";
+import {TaskDefinition} from "./taskDefinition";
+import {PipelineWorker} from "./pipelineWorker";
 
 export interface IStartTaskInput {
     pipelineStageId: string;
@@ -38,68 +37,95 @@ export enum SyncStatus {
     Expired = 3
 }
 
-export interface ITaskExecutionAttributes {
-    id?: string;
-    worker_id?: string;
-    worker_task_execution_id?: string;
-    task_definition_id?: string;
-    pipeline_stage_id?: string;
-    tile_id?: string;
-    resolved_output_path?: string;
-    resolved_script?: string;
-    resolved_interpreter?: string;
-    resolved_script_args?: string;
-    resolved_cluster_args?: string;
-    resolved_log_path?: string;
-    expected_exit_code?: number;
-    local_work_units?: number;
-    cluster_work_units?: number;
-    queue_type?: number;
-    job_id?: number;
-    job_name?: string;
-    execution_status_code?: ExecutionStatus;
-    completion_status_code?: CompletionResult;
-    last_process_status_code?: number;
-    cpu_time_seconds?: number;
-    max_cpu_percent?: number;
-    max_memory_mb?: number;
-    exit_code?: number;
-    submitted_at?: Date;
-    started_at?: Date;
-    completed_at?: Date;
-    sync_status?: SyncStatus;
-    synchronized_at?: Date;
-    created_at?: Date;
-    updated_at?: Date;
-    deleted_at?: Date;
+export interface ITaskExecution {
+    id: string;
+    task_definition_id: string;
+    pipeline_stage_id: string;
+    tile_id: string;
+    resolved_output_path: string;
+    resolved_script: string;
+    resolved_interpreter: string;
+    resolved_script_args: string;
+    resolved_cluster_args: string;
+    resolved_log_path: string;
+    expected_exit_code: number;
+    worker_id: string;
+    worker_task_execution_id: string;
+    local_work_units: number;
+    cluster_work_units: number;
+    queue_type: number;
+    job_id: number;
+    job_name: string;
+    execution_status_code: ExecutionStatus;
+    completion_status_code: CompletionResult;
+    last_process_status_code: number;
+    cpu_time_seconds: number;
+    max_cpu_percent: number
+    max_memory_mb: number;
+    exit_code: number;
+    submitted_at: Date;
+    started_at: Date;
+    completed_at: Date;
+    sync_status: SyncStatus;
 }
 
-export interface IWorkerTaskExecutionAttributes extends ITaskExecutionAttributes {
-    remote_task_execution_id: string;
+export class TaskExecution extends Model implements ITaskExecution {
+    public id: string;
+    public task_definition_id: string;
+    public pipeline_stage_id: string;
+    public tile_id: string;
+    public resolved_output_path: string;
+    public resolved_script: string;
+    public resolved_interpreter: string;
+    public resolved_script_args: string;
+    public resolved_cluster_args: string;
+    public resolved_log_path: string;
+    public expected_exit_code: number;
+    public worker_id: string;
+    public worker_task_execution_id: string;
+    public local_work_units: number;
+    public cluster_work_units: number;
+    public queue_type: number;
+    public job_id: number;
+    public job_name: string;
+    public execution_status_code: ExecutionStatus;
+    public completion_status_code: CompletionResult;
+    public last_process_status_code: number;
+    public cpu_time_seconds: number;
+    public max_cpu_percent: number;
+    public max_memory_mb: number;
+    public exit_code: number;
+    public submitted_at: Date;
+    public started_at: Date;
+    public completed_at: Date;
+    public sync_status: SyncStatus;
+    public synchronized_at: Date;
+
+    readonly created_at: Date;
+    readonly updated_at: Date;
+    readonly deleted_at: Date;
 }
 
+export type TaskExecutionStatic = typeof Model & {
+    new (values?: object, options?: BuildOptions): TaskExecution;
+}
+
+/*
 export interface ITaskExecution extends Instance<ITaskExecutionAttributes>, ITaskExecutionAttributes {
 }
 
 export interface ITaskExecutionModel extends Model<ITaskExecution, ITaskExecutionAttributes> {
-    createTaskExecution(worker: IPipelineWorker, taskDefinition: ITaskDefinition, startTaskInput: IStartTaskInput): Promise<ITaskExecution>;
+    createTaskExecution(worker: IPipelineWorkerAttributes, taskDefinition: ITaskDefinition, startTaskInput: IStartTaskInput): Promise<ITaskExecution>;
     getPage(reqOffset: number, reqLimit: number, completionCode: CompletionResult): Promise<ITaskExecution[]>;
 }
+*/
 
-export function createTaskExecutionTable(sequelize: Sequelize, tableName: string): any {
-    const DataTypes = sequelize.Sequelize;
-
-    return sequelize.define(tableName, {
+export const createTaskExecutionTable = (sequelize: Sequelize, tableName: string): TaskExecutionStatic => {
+    return <TaskExecutionStatic>sequelize.define(tableName, {
         id: {
             primaryKey: true,
             type: DataTypes.UUID,
             defaultValue: DataTypes.UUIDV4
-        },
-        worker_id: {
-            type: DataTypes.UUID
-        },
-        worker_task_execution_id: {
-            type: DataTypes.UUID
         },
         task_definition_id: {
             type: DataTypes.UUID
@@ -133,6 +159,124 @@ export function createTaskExecutionTable(sequelize: Sequelize, tableName: string
         },
         expected_exit_code: {
             type: DataTypes.INTEGER
+        },
+        worker_id: {
+            type: DataTypes.UUID
+        },
+        worker_task_execution_id: {
+            type: DataTypes.UUID
+        },
+        local_work_units: {
+            type: DataTypes.INTEGER
+        },
+        cluster_work_units: {
+            type: DataTypes.INTEGER
+        },
+        queue_type: {
+            type: DataTypes.INTEGER
+        },
+        job_id: {
+            type: DataTypes.INTEGER
+        },
+        job_name: {
+            type: DataTypes.TEXT
+        },
+        execution_status_code: {
+            type: DataTypes.INTEGER
+        },
+        completion_status_code: {
+            type: DataTypes.INTEGER
+        },
+        last_process_status_code: {
+            type: DataTypes.INTEGER
+        },
+        cpu_time_seconds: {
+            type: DataTypes.FLOAT
+        },
+        max_cpu_percent: {
+            type: DataTypes.FLOAT
+        },
+        max_memory_mb: {
+            type: DataTypes.FLOAT
+        },
+        exit_code: {
+            type: DataTypes.INTEGER
+        },
+        submitted_at: {
+            type: DataTypes.DATE
+        },
+        started_at: {
+            type: DataTypes.DATE
+        },
+        completed_at: {
+            type: DataTypes.DATE
+        },
+        sync_status: {
+            type: DataTypes.INTEGER
+        },
+        synchronized_at: {
+            type: DataTypes.DATE
+        }
+    }, {
+        timestamps: true,
+        createdAt: "created_at",
+        updatedAt: "updated_at",
+        deletedAt: "deleted_at",
+        paranoid: false,
+        indexes: [{
+            fields: ["worker_id"]
+        }]
+    });
+};
+
+/*
+export function createTaskExecutionTable(sequelize: Sequelize, tableName: string): any {
+    const DataTypes = sequelize.Sequelize;
+
+    return sequelize.define(tableName, {
+        id: {
+            primaryKey: true,
+            type: DataTypes.UUID,
+            defaultValue: DataTypes.UUIDV4
+        },
+        task_definition_id: {
+            type: DataTypes.UUID
+        },
+        pipeline_stage_id: {
+            type: DataTypes.UUID
+        },
+        tile_id: {
+            type: DataTypes.TEXT
+        },
+        resolved_output_path: {
+            type: DataTypes.TEXT,
+            defaultValue: ""
+        },
+        resolved_script: {
+            type: DataTypes.TEXT,
+            defaultValue: ""
+        },
+        resolved_interpreter: {
+            type: DataTypes.TEXT,
+            defaultValue: ""
+        },
+        resolved_script_args: {
+            type: DataTypes.TEXT
+        },
+        resolved_cluster_args: {
+            type: DataTypes.TEXT
+        },
+        resolved_log_path: {
+            type: DataTypes.TEXT
+        },
+        expected_exit_code: {
+            type: DataTypes.INTEGER
+        },
+        worker_id: {
+            type: DataTypes.UUID
+        },
+        worker_task_execution_id: {
+            type: DataTypes.UUID
         },
         local_work_units: {
             type: DataTypes.INTEGER
@@ -196,30 +340,9 @@ export function createTaskExecutionTable(sequelize: Sequelize, tableName: string
         }]
     });
 }
+*/
 
-export function augmentTaskExecutionModel(Model: ITaskExecutionModel) {
-    Model.getPage = async (reqOffset: number, reqLimit: number, completionCode: CompletionResult): Promise<ITaskExecution[]> => {
-        const options: FindOptions<ITaskExecutionAttributes> = {
-            offset: reqOffset,
-            limit: reqLimit
-        };
-
-        if (!isNullOrUndefined(completionCode)) {
-            options.where = {completion_status_code: completionCode};
-        }
-
-        return Model.findAll(options);
-    };
-
-/*
-    Model.createTaskExecution = async function (worker: IPipelineWorker, taskDefinition: ITaskDefinition, startTaskInput: IStartTaskInput): Promise<ITaskExecution> {
-        let taskExecution = await createTaskExecutionWithInput(worker, taskDefinition, startTaskInput);
-
-        return this.create(taskExecution);
-    };*/
-}
-
-export async function createTaskExecutionWithInput(worker: IPipelineWorker, taskDefinition: ITaskDefinition, startTaskInput: IStartTaskInput): Promise<ITaskExecutionAttributes> {
+export async function createTaskExecutionWithInput(worker: PipelineWorker, taskDefinition: TaskDefinition, startTaskInput: IStartTaskInput): Promise<ITaskExecution> {
     return {
         id: uuid.v4(),
         worker_id: worker.id,
@@ -250,9 +373,5 @@ export async function createTaskExecutionWithInput(worker: IPipelineWorker, task
         started_at: null,
         completed_at: null,
         sync_status: SyncStatus.Never,
-        synchronized_at: null,
-        created_at: null,
-        updated_at: null,
-        deleted_at: null
     };
 }

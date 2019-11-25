@@ -1,6 +1,9 @@
 import {HttpLink} from "apollo-link-http";
 import {ApolloClient} from "apollo-client";
 import {InMemoryCache} from "apollo-cache-inmemory";
+import {WorkerTaskExecution} from "../data-model/workerTaskExecution";
+import {PipelineWorker, PipelineWorkerStatus} from "../data-model/pipelineWorker";
+import {ITaskExecution} from "../data-model/taskExecution";
 
 const gql = require("graphql-tag");
 
@@ -8,12 +11,8 @@ require("isomorphic-fetch");
 
 const debug = require("debug")("pipeline:scheduler:pipeline-worker-client");
 
-import {IPipelineWorker, PipelineWorkerStatus} from "../data-model/sequelize/pipelineWorker";
-import {ITaskExecutionAttributes} from "../data-model/taskExecution";
-import {PersistentStorageManager} from "../data-access/sequelize/databaseConnector";
-
 export interface IStartTaskResponse {
-    taskExecution: ITaskExecutionAttributes;
+    taskExecution: WorkerTaskExecution;
     localTaskLoad: number;
     clusterTaskLoad: number;
 }
@@ -39,7 +38,7 @@ export class PipelineWorkerClient {
 
     private _idClientMap = new Map<string, any>();
 
-    private getClient(worker: IPipelineWorker): any {
+    private getClient(worker: PipelineWorker): any {
         if (worker === null) {
             return null;
         }
@@ -54,12 +53,10 @@ export class PipelineWorkerClient {
 
                 debug(`creating apollo client with uri ${uri} for ${worker.id}`);
 
-                const client = new ApolloClient({
+                this._idClientMap[worker.id] = new ApolloClient({
                     link: new HttpLink({uri}),
                     cache: new InMemoryCache()
                 });
-
-                this._idClientMap[worker.id] = client;
             } catch (err) {
                 debug(`failed to create apollo client with uri ${uri}`);
 
@@ -70,7 +67,7 @@ export class PipelineWorkerClient {
         return client;
     }
 
-    public async startTaskExecution(worker: IPipelineWorker, taskInput: ITaskExecutionAttributes): Promise<IStartTaskResponse> {
+    public async startTaskExecution(worker: PipelineWorker, taskInput: ITaskExecution): Promise<IStartTaskResponse> {
         const client = this.getClient(worker);
 
         if (client === null) {
@@ -111,7 +108,7 @@ export class PipelineWorkerClient {
         }
     }
 
-    public async queryWorker(worker: IPipelineWorker): Promise<IClientWorker> {
+    public async queryWorker(worker: PipelineWorker): Promise<IClientWorker> {
         const client = this.getClient(worker);
 
         if (client === null || client === undefined) {
@@ -144,8 +141,8 @@ export class PipelineWorkerClient {
         }
     }
 
-    private static async markWorkerUnavailable(worker: IPipelineWorker): Promise<void> {
-        const row = await PersistentStorageManager.Instance().getPipelineWorker(worker.id);
+    private static async markWorkerUnavailable(worker: PipelineWorker): Promise<void> {
+        const row = await PipelineWorker.getForWorkerId(worker.id);
 
         row.status = PipelineWorkerStatus.Unavailable;
     }

@@ -3,20 +3,20 @@ const {performance} = require("perf_hooks");
 
 const debug = require("debug")("pipeline:scheduler:map-scheduler");
 
-import {IPipelineStage} from "../data-model/sequelize/pipelineStage";
+import {PipelineStage} from "../data-model/pipelineStage";
 
 import {StagePipelineScheduler} from "./stagePipelineScheduler";
-import {IPipelineTile} from "../data-access/sequelize/project-connectors/stageTableConnector";
+import {PipelineTile} from "../data-access/sequelize/stageTableConnector";
 import {DefaultPipelineIdKey, IMuxTileLists, TilePipelineStatus} from "./basePipelineScheduler";
-import {IProject} from "../data-model/sequelize/project";
+import {Project} from "../data-model/project";
 
 export class PipelineMapScheduler extends StagePipelineScheduler {
 
-    public constructor(pipelineStage: IPipelineStage, project: IProject) {
+    public constructor(pipelineStage: PipelineStage, project: Project) {
         super(pipelineStage, project);
     }
 
-    protected async muxInputOutputTiles(project: IProject, knownInput: IPipelineTile[], knownOutput: IPipelineTile[]): Promise<IMuxTileLists> {
+    protected async muxInputOutputTiles(project: Project, knownInput: PipelineTile[], knownOutput: PipelineTile[]): Promise<IMuxTileLists> {
         let sorted: IMuxTileLists = {
             toInsert: [],
             toUpdate: [],
