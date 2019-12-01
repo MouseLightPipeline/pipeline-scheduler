@@ -331,7 +331,7 @@ export class StageTableConnector {
             return;
         }
 
-        return this._toProcessTable.destroy({where: {relative_path: {$in: toDelete}}});
+        return this._toProcessTable.destroy({where: {relative_path: {[Op.in]: toDelete}}});
     }
 
     public async deleteToProcessTile(toProcess: ToProcessTile) {
@@ -353,7 +353,7 @@ export class StageTableConnector {
             return;
         }
 
-        return this._inProcessTable.destroy({where: {relative_path: {$in: toDelete}}});
+        return this._inProcessTable.destroy({where: {relative_path: {[Op.in]: toDelete}}});
     }
 
 

@@ -1,6 +1,6 @@
-import {BuildOptions, Model, DataTypes} from "sequelize";
+import {BuildOptions, Model, DataTypes, Op} from "sequelize";
 
-import {generatePipelineCustomTableName, StageTableConnector, ToProcessTile} from "./stageTableConnector";
+import {generatePipelineCustomTableName, StageTableConnector} from "./stageTableConnector";
 
 export interface IAdjacentTile {
     relative_path: string,
@@ -46,7 +46,7 @@ export class AdjacentTileStageConnector extends StageTableConnector {
             return;
         }
 
-        return this._adjacentTileModel.destroy({where: {relative_path: {$in: toDelete}}});
+        return this._adjacentTileModel.destroy({where: {relative_path: {[Op.in]: toDelete}}});
     }
 
     protected defineTables() {

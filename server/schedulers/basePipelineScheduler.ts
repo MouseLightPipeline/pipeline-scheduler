@@ -6,8 +6,7 @@ import {ISchedulerInterface} from "./schedulerHub";
 import {Project} from "../data-model/project";
 import {
     CompletionResult,
-    ExecutionStatus, ITaskExecution,
-    TaskExecution
+    ExecutionStatus, ITaskExecution
 } from "../data-model/taskExecution";
 import {
     connectorForProject,
@@ -16,8 +15,7 @@ import {
 import {
     IPipelineTile, IToProcessTile,
     PipelineTile,
-    StageTableConnector,
-    ToProcessTile
+    StageTableConnector
 } from "../data-access/sequelize/stageTableConnector";
 import {PipelineWorker} from "../data-model/pipelineWorker";
 import {PipelineStage} from "../data-model/pipelineStage";
@@ -48,11 +46,9 @@ export interface IMuxTileLists {
 }
 
 export abstract class BasePipelineScheduler implements ISchedulerInterface {
-    // protected _project: IProject;
     private readonly _projectId: string;
 
     protected readonly _sourceId: string;
-    // protected _source: IProject | IPipelineStage;
 
     protected _outputStageConnector: StageTableConnector;
 
@@ -176,8 +172,6 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
                 return obj;
             });
 
-            let now = new Date();
-
             toProcessInsert = toSchedule.map(obj => {
                 return {
                     relative_path: obj.relative_path,
@@ -292,7 +286,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
      * This is the opportunity to prepare any scheduler-specific information that is mapped from parameter arguments.
      * In particular, anything that requires an async/await call.
      *
-     * @param {IPipelineTileAttributes} tile
+     * @param {PipelineTile} tile
      * @returns {Promise<any>}
      */
     protected async getTaskContext(tile: PipelineTile): Promise<any> {

@@ -36,8 +36,8 @@ export interface IProjectInput {
     user_parameters?: string;
     zPlaneSkipIndices?: number[];
     input_source_state?: ProjectInputSourceState;
-    last_seen_input_source?: Date;
-    last_checked_input_source?: Date;
+    last_seen_input_source?: number;
+    last_checked_input_source?: number;
 }
 
 export class Project extends Model {

@@ -58,7 +58,7 @@ export class PipelineApiClient {
         const projectInput: IProjectInput = {
             id,
             input_source_state: state,
-            last_checked_input_source: new Date()
+            last_checked_input_source: (new Date()).valueOf()
         };
 
         if (state >= ProjectInputSourceState.Dashboard) {
@@ -70,7 +70,7 @@ export class PipelineApiClient {
                 mutation: gql`
                 mutation updateProject($project: ProjectInput) {
                     updateProject(project: $project) {
-                      project {
+                      source {
                         id
                       }
                     }

@@ -81,16 +81,6 @@ export class PipelineWorker extends Model {
     public set cluster_task_load(load: number) {
         this.dynamic_props.cluster_task_load = load;
     }
-
-    public static async getForWorkerId(workerId: string): Promise<PipelineWorker> {
-        let worker = await PipelineWorker.findOne({where: {worker_id: workerId}});
-
-        if (!worker) {
-            worker = await PipelineWorker.create({worker_id: workerId});
-        }
-
-        return worker;
-    }
 }
 
 const TableName = "PipelineWorkers";

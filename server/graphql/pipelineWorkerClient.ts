@@ -142,8 +142,8 @@ export class PipelineWorkerClient {
     }
 
     private static async markWorkerUnavailable(worker: PipelineWorker): Promise<void> {
-        const row = await PipelineWorker.getForWorkerId(worker.id);
-
-        row.status = PipelineWorkerStatus.Unavailable;
+        await worker.update({
+            status: PipelineWorkerStatus.Unavailable
+        })
     }
 }

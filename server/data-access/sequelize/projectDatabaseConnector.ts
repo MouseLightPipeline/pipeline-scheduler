@@ -79,18 +79,6 @@ export class ProjectDatabaseConnector {
     public async internalConnectorForStage(stage: PipelineStage) {
         // This method can only be called serially despite async due to async queue.  Could arrive to find
         if (!this._stageConnectors.has(stage.id)) {
-
-            // The API does not create stage tables, only the scheduler does.
-            // let haveTables = (await this._connection.query(`SELECT to_regclass('public.${stage.id}');`, {type: sequelize.QueryTypes.SELECT})).some(r => r.to_regclass !== null);
-
-            const test = await this._connection.query<any>(`SELECT to_regclass('public.${stage.id}');`, {type: sequelize.QueryTypes.SELECT});
-
-            const haveTables = (await this._connection.query<any>(`SELECT to_regclass('public.${stage.id}');`, {type: sequelize.QueryTypes.SELECT})).some(r => r.to_regclass !== null);
-
-            if (!haveTables) {
-                return null;
-            }
-
             const method: PipelineStageMethod = stage.function_type;
 
             const connector = method === PipelineStageMethod.MapTile ? new StageTableConnector(this._connection, stage.id) : new AdjacentTileStageConnector(this._connection, stage.id);
@@ -119,20 +107,15 @@ export class ProjectDatabaseConnector {
     }
 
     public async internalConnectorForProject(): Promise<StageTableConnector> {
-        if (!this._stageConnectors.has(this._project.id)) {
-            // The API does not create stage tables, only the scheduler does.aa
-            if (!this._connection.isDefined(this._project.id)) {
-                return null;
-            }
-
-            const connector = new StageTableConnector(this._connection, this._project.id);
+        if (!this._stageConnectors.has(this._databaseName)) {
+            const connector = new StageTableConnector(this._connection, this._databaseName);
 
             await connector.initialize();
 
-            this._stageConnectors.set(this._project.id, connector);
+            this._stageConnectors.set(this._databaseName, connector);
         }
 
-        return this._stageConnectors.get(this._project.id);
+        return this._stageConnectors.get(this._databaseName);
     }
 
     private async ensureDatabase() {

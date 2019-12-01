@@ -3,10 +3,7 @@ import * as  path from "path";
 const debug = require("debug")("pipeline:scheduler:stage-pipeline-scheduler");
 
 import {PipelineWorkerClient} from "../graphql/pipelineWorkerClient";
-import {
-    IToProcessTile,
-    StageTableConnector, ToProcessTile
-} from "../data-access/sequelize/stageTableConnector";
+import {StageTableConnector, ToProcessTile} from "../data-access/sequelize/stageTableConnector";
 import {BasePipelineScheduler, DefaultPipelineIdKey, TilePipelineStatus} from "./basePipelineScheduler";
 import {ProjectDatabaseConnector} from "../data-access/sequelize/projectDatabaseConnector";
 import {createTaskExecutionWithInput, ExecutionStatus, ITaskExecution} from "../data-model/taskExecution";

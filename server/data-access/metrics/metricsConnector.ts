@@ -45,15 +45,19 @@ export class MetricsConnector {
                     pending_duration_minutes
                 };
 
+                const worker = await PipelineWorker.findByPk(taskExecution.worker_id);
+
+                const tags =  {
+                    worker_id: taskExecution.worker_id,
+                        worker_name: worker.name,
+                        task_id: taskExecution.task_definition_id,
+                        pipeline_stage_id: taskExecution.pipeline_stage_id
+                };
+
                 await this.taskExecutionDatabase.writePoints([
                     {
                         measurement: "task_execution",
-                        tags: {
-                            worker_id: taskExecution.worker_id,
-                            worker_name: (await PipelineWorker.getForWorkerId(taskExecution.worker_id)).name,
-                            task_id: taskExecution.task_definition_id,
-                            pipeline_stage_id: taskExecution.pipeline_stage_id
-                        },
+                        tags,
                         fields
                     }
                 ]);
