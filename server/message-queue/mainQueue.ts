@@ -107,7 +107,9 @@ export class MainQueue {
     }
 
     private async acknowledgeCompleteMessage(taskExecution: IWorkerTaskExecutionAttributes, resolve) {
-        const ack = await SchedulerHub.Instance.onTaskExecutionComplete(taskExecution);
+        const haveInstance = SchedulerHub.Instance != null;
+
+        const ack = haveInstance && (await SchedulerHub.Instance.onTaskExecutionComplete(taskExecution));
 
         if (ack) {
             debug("write metrics");
@@ -133,8 +135,9 @@ export class MainQueue {
     }
 
     private async acknowledgeUpdateMessage(taskExecution: IWorkerTaskExecutionAttributes, resolve) {
-        debug("acknowledge update message");
-        const ack = await SchedulerHub.Instance.onTaskExecutionUpdate(taskExecution);
+        const haveInstance = SchedulerHub.Instance != null;
+
+        const ack = haveInstance && (await SchedulerHub.Instance.onTaskExecutionUpdate(taskExecution));
 
         if (ack) {
             resolve();

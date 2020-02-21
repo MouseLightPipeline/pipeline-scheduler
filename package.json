@@ -1,6 +1,6 @@
 {
   "name": "pipeline-scheduler",
-  "version": "1.5.0",
+  "version": "1.5.2",
   "description": "",
   "author": "Patrick Edson <pedson@leapscientific.com> (http://github.com/pedson)",
   "main": "server/pipelineSchedulerApp.js",
