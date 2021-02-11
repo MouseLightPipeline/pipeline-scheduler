@@ -68,6 +68,8 @@ export class SchedulerHub {
             if (worker) {
                 await worker.onTaskExecutionComplete(taskExecution);
                 return true;
+            } else {
+                debug("worker missing for task completion")
             }
         } catch (err) {
             debug(err);

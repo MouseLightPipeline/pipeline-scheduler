@@ -109,7 +109,13 @@ export class MainQueue {
     private async acknowledgeCompleteMessage(taskExecution: IWorkerTaskExecutionAttributes, resolve) {
         const haveInstance = SchedulerHub.Instance != null;
 
-        const ack = haveInstance && (await SchedulerHub.Instance.onTaskExecutionComplete(taskExecution));
+        if (!haveInstance) {
+            debug(`scheduler hub not available`);
+            setTimeout(() => this.acknowledgeCompleteMessage(taskExecution, resolve), 10 * 1000);
+            return;
+        }
+
+        const ack = await SchedulerHub.Instance.onTaskExecutionComplete(taskExecution);
 
         if (ack) {
             debug("write metrics");
