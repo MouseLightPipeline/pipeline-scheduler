@@ -87,7 +87,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         return Project.findByPk(this._projectId);
     }
 
-    public abstract async getSource(): Promise<Project | PipelineStage>;
+    public abstract getSource(): Promise<Project | PipelineStage>;
 
     public async run(): Promise<void> {
         if (this._isInitialized) {
@@ -431,7 +431,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         setTimeout(() => this.performWork(), 30 * 1000)
     }
 
-    protected abstract async createOutputStageConnector(connector: ProjectDatabaseConnector): Promise<StageTableConnector>;
+    protected abstract createOutputStageConnector(connector: ProjectDatabaseConnector): Promise<StageTableConnector>;
 
     protected async createTables(connector: ProjectDatabaseConnector) {
         this._outputStageConnector = await this.createOutputStageConnector(connector);

@@ -1,6 +1,6 @@
 {
   "name": "pipeline-scheduler",
-  "version": "1.5.0",
+  "version": "1.5.5",
   "description": "",
   "author": "Patrick Edson <pedson@leapscientific.com> (http://github.com/pedson)",
   "main": "server/pipelineSchedulerApp.js",
@@ -8,9 +8,12 @@
   "dockerRepository": "mouselightpipeline",
   "dockerImageName": "scheduler",
   "scripts": {
-    "devel": "DEBUG=pipeline* node $NODE_DEBUG_OPTION --trace-warnings server/pipelineSchedulerApp.js",
-    "docker-build": "gulp docker-build",
-    "docker-release": "gulp release"
+    "debug": "DEBUG=pipeline* node $NODE_DEBUG_OPTION --trace-warnings server/pipelineSchedulerApp.js",
+    "clean": "tsc && gulp clean",
+    "compile": "tsc && gulp compile",
+    "build": "tsc && gulp build",
+    "docker-build": "tsc && gulp docker-build",
+    "docker-release": "tsc && gulp release"
   },
   "jest": {
     "transform": {
@@ -64,10 +67,12 @@
     "@types/serve-static": "^1.13.3",
     "@types/uuid": "^3.4.6",
     "@types/validator": "^12.0.0",
+    "del": "^6.0.0",
     "gulp": "^4.0.2",
     "gulp-shell": "^0.7.1",
     "jest": "^24.9.0",
+    "merge-stream": "^2.0.0",
     "ts-jest": "^24.2.0",
-    "typescript": "^3.7.2"
+    "typescript": "^4.1.5"
   }
 }
