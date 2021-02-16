@@ -39,7 +39,7 @@ const cleanCommand = `rm -rf dist`;
 
 const compileTypescript = `tsc -p tsconfig.prod.json`;
 
-const moveFiles = `cp ./{package.json,yarn.lock,LICENSE,docker-entry.sh} dist`;
+const moveFiles = `cp package.json yarn.lock LICENSE docker-entry.sh dist/`;
 
 
 gulp.task("default", ["docker-build"]);

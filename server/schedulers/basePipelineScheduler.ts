@@ -90,7 +90,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         return await PersistentStorageManager.Instance().Projects.findById(this._projectId);
     }
 
-    public abstract async getSource(): Promise<IProject | IPipelineStage>;
+    public abstract getSource(): Promise<IProject | IPipelineStage>;
 
     public async run(): Promise<void> {
         if (this._isInitialized) {
@@ -435,10 +435,10 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
             debug(err);
         }
 
-        setTimeout(() => this.performWork(), 30 * 1000)
+        setTimeout(() => this.performWork(), 20 * 1000)
     }
 
-    protected abstract async createOutputStageConnector(connector: ProjectDatabaseConnector): Promise<StageTableConnector>;
+    protected abstract createOutputStageConnector(connector: ProjectDatabaseConnector): Promise<StageTableConnector>;
 
     protected async createTables(connector: ProjectDatabaseConnector) {
         this._outputStageConnector = await this.createOutputStageConnector(connector);
