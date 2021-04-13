@@ -137,7 +137,7 @@ export class StageTableConnector {
         this.defineTables();
 
         // Do not perform mode/table updates from the API server, only the scheduler.
-        // this._connection.sync();
+        this._connection.sync();
     }
 
     // -----------------------------------------------------------------------------------------------------------------
