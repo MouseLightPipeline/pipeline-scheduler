@@ -55,12 +55,12 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
         this.IsProcessingRequested = true;
     }
 
-    public async getSource(): Promise<Project | PipelineStage> {
+    public getSource(): Promise<Project | PipelineStage> {
         return this.getProject();
     }
 
-    protected async createOutputStageConnector(connector: ProjectDatabaseConnector): Promise<StageTableConnector> {
-        return await connector.connectorForProject();
+    protected createOutputStageConnector(connector: ProjectDatabaseConnector): Promise<StageTableConnector> {
+        return connector.connectorForProject();
     }
 
     protected async refreshTileStatus(): Promise<boolean> {

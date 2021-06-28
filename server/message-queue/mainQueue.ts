@@ -106,7 +106,7 @@ export class MainQueue {
         });
     }
 
-    private async acknowledgeCompleteMessage(taskExecution: IWorkerTaskExecutionAttributes, resolve) {
+    private async acknowledgeCompleteMessage(taskExecution: WorkerTaskExecution, resolve) {
         const haveInstance = SchedulerHub.Instance != null;
 
         if (!haveInstance) {
@@ -140,7 +140,7 @@ export class MainQueue {
         });
     }
 
-    private async acknowledgeUpdateMessage(taskExecution: IWorkerTaskExecutionAttributes, resolve) {
+    private async acknowledgeUpdateMessage(taskExecution: WorkerTaskExecution, resolve) {
         const haveInstance = SchedulerHub.Instance != null;
 
         const ack = haveInstance && (await SchedulerHub.Instance.onTaskExecutionUpdate(taskExecution));

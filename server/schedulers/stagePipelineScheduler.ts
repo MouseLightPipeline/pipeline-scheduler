@@ -29,12 +29,12 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
         this._pipelineStage = pipelineStage;
     }
 
-    public async getSource(): Promise<Project | PipelineStage> {
+    public getSource(): Promise<Project | PipelineStage> {
         return PipelineStage.findByPk(this._sourceId);
     }
 
-    protected async createOutputStageConnector(connector: ProjectDatabaseConnector): Promise<StageTableConnector> {
-        return await connector.connectorForStage(this._pipelineStage);
+    protected createOutputStageConnector(connector: ProjectDatabaseConnector): Promise<StageTableConnector> {
+        return connector.connectorForStage(this._pipelineStage);
     }
 
     protected async createTables(connector: ProjectDatabaseConnector) {

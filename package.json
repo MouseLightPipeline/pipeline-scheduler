@@ -8,7 +8,7 @@
   "dockerRepository": "mouselightpipeline",
   "dockerImageName": "scheduler",
   "scripts": {
-    "debug": "DEBUG=pipeline* node $NODE_DEBUG_OPTION --trace-warnings server/pipelineSchedulerApp.js",
+    "devel": "DEBUG=pipeline* node $NODE_DEBUG_OPTION --trace-warnings server/pipelineSchedulerApp.js",
     "clean": "tsc && gulp clean",
     "compile": "tsc && gulp compile",
     "build": "tsc && gulp build",

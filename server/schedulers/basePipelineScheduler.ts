@@ -83,11 +83,11 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         return this._isProcessingRequested;
     }
 
-    public async getProject(): Promise<Project> {
+    public getProject(): Promise<Project> {
         return Project.findByPk(this._projectId);
     }
 
-    public abstract getSource(): Promise<IProject | IPipelineStage>;
+    public abstract getSource(): Promise<Project | PipelineStage>;
 
     public async run(): Promise<void> {
         if (this._isInitialized) {
