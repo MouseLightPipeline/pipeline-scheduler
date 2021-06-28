@@ -13,7 +13,7 @@ import {PipelineWorker} from "../data-model/pipelineWorker";
 import {TaskDefinition} from "../data-model/taskDefinition";
 
 const MAX_KNOWN_INPUT_SKIP_COUNT = 1;
-const MAX_ASSIGN_PER_ITERATION = 50;
+const MAX_ASSIGN_PER_ITERATION = 75;
 
 export abstract class StagePipelineScheduler extends BasePipelineScheduler {
 

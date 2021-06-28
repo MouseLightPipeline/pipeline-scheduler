@@ -227,7 +227,7 @@ export class StageTableConnector {
             return;
         }
 
-        debug(`bulk update ${objArray.length} items`);
+        // debug(`bulk update ${objArray.length} items`);
 
         // Operate on a shallow copy since splice is going to be destructive.
         const toUpdate = objArray.slice();

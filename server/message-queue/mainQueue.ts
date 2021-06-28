@@ -106,7 +106,15 @@ export class MainQueue {
         });
     }
 
-    private async acknowledgeCompleteMessage(taskExecution: WorkerTaskExecution, resolve) {
+    private async acknowledgeCompleteMessage(taskExecution: IWorkerTaskExecutionAttributes, resolve) {
+        const haveInstance = SchedulerHub.Instance != null;
+
+        if (!haveInstance) {
+            debug(`scheduler hub not available`);
+            setTimeout(() => this.acknowledgeCompleteMessage(taskExecution, resolve), 10 * 1000);
+            return;
+        }
+
         const ack = await SchedulerHub.Instance.onTaskExecutionComplete(taskExecution);
 
         if (ack) {
@@ -132,9 +140,10 @@ export class MainQueue {
         });
     }
 
-    private async acknowledgeUpdateMessage(taskExecution: WorkerTaskExecution, resolve) {
-        debug("acknowledge update message");
-        const ack = await SchedulerHub.Instance.onTaskExecutionUpdate(taskExecution);
+    private async acknowledgeUpdateMessage(taskExecution: IWorkerTaskExecutionAttributes, resolve) {
+        const haveInstance = SchedulerHub.Instance != null;
+
+        const ack = haveInstance && (await SchedulerHub.Instance.onTaskExecutionUpdate(taskExecution));
 
         if (ack) {
             resolve();

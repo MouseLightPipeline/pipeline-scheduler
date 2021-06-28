@@ -62,7 +62,7 @@ export class MetricsConnector {
                     }
                 ]);
 
-                debug("wrote task execution");
+                // debug("wrote task execution");
             }
         } catch (err) {
             debug("write task execution metrics failed.");

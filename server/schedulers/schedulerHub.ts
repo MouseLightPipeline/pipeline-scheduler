@@ -67,6 +67,8 @@ export class SchedulerHub {
             if (worker) {
                 await worker.onTaskExecutionComplete(taskExecution);
                 return true;
+            } else {
+                debug(`stage worker for pipeline stage ${taskExecution.pipeline_stage_id} missing for task completion`)
             }
         } catch (err) {
             debug(err);
