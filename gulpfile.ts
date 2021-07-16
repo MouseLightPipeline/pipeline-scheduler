@@ -59,20 +59,13 @@ function createShellTasks(sourceFile: string) {
 
     const dockerRepoImage = `${repo}/${imageName}`;
 
-///
-//  The objective here is to build and tag the actual version, mark it as latest, and also tag it with just the major
-//  version and major.minor as the "latest" within those scopes.  Iterations of deploy-services should generally use
-//  major.minor in the Compose file rather that just latest.  This facilitates side-by-side deployments of current and
-//  next version systems where pulling "latest" doesn't affect the older system on subsequent up commands.
-///
-
     const imageWithVersion = `${dockerRepoImage}:${version}`;
     const imageWithVersionMajor = versionMajor ? `${dockerRepoImage}:${versionMajor}` : null;
     const imageWithVersionMajMin = versionMajMin ? `${dockerRepoImage}:${versionMajMin}` : null;
     const imageAsLatest = `${dockerRepoImage}:latest`;
 
     // Docker build/tag
-    const buildCommand = `docker build --tag ${imageWithVersion} .`;
+    const buildCommand = `docker build --platform linux/amd64 --tag ${imageWithVersion} .`;
     const tagMajorCommand = imageWithVersionMajor ? `docker tag ${imageWithVersion} ${imageWithVersionMajor}` : `echo "could not tag with major version"`;
     const tagMajMinCommand = imageWithVersionMajMin ? `docker tag ${imageWithVersion} ${imageWithVersionMajMin}` : `echo "could not tag with major.minor version"`;
     const tagLatestCommand = `docker tag ${imageWithVersion} ${imageAsLatest}`;
