@@ -3,14 +3,15 @@ import * as  path from "path";
 const debug = require("debug")("pipeline:scheduler:stage-pipeline-scheduler");
 
 import {PipelineWorkerClient} from "../graphql/pipelineWorkerClient";
-import {StageTableConnector, ToProcessTile} from "../data-access/sequelize/stageTableConnector";
-import {BasePipelineScheduler, DefaultPipelineIdKey, TilePipelineStatus} from "./basePipelineScheduler";
-import {ProjectDatabaseConnector} from "../data-access/sequelize/projectDatabaseConnector";
-import {createTaskExecutionWithInput, ExecutionStatus, ITaskExecution} from "../data-model/taskExecution";
-import {PipelineStage} from "../data-model/pipelineStage";
-import {Project} from "../data-model/project";
-import {PipelineWorker} from "../data-model/pipelineWorker";
-import {TaskDefinition} from "../data-model/taskDefinition";
+import {SchedulerStageTableConnector} from "../data-access/activity/schedulerStageTableConnector";
+import {BasePipelineScheduler, TilePipelineStatus} from "./basePipelineScheduler";
+import {ProjectDatabaseConnector} from "../data-access/activity/projectDatabaseConnector";
+import {createTaskExecutionWithInput, ExecutionStatus, ITaskExecution} from "../data-model/activity/taskExecution";
+import {PipelineStage} from "../data-model/system/pipelineStage";
+import {Project} from "../data-model/system/project";
+import {PipelineWorker} from "../data-model/system/pipelineWorker";
+import {TaskDefinition} from "../data-model/system/taskDefinition";
+import {ToProcessTile} from "../data-model/activity/toProcessTile";
 
 const MAX_KNOWN_INPUT_SKIP_COUNT = 1;
 const MAX_ASSIGN_PER_ITERATION = 75;
@@ -18,8 +19,6 @@ const MAX_ASSIGN_PER_ITERATION = 75;
 export abstract class StagePipelineScheduler extends BasePipelineScheduler {
 
     protected _pipelineStage: PipelineStage;
-
-    protected _inputStageConnector: StageTableConnector;
 
     private _knownInputSkipCheckCount: number = 0;
 
@@ -33,12 +32,13 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
         return PipelineStage.findByPk(this._sourceId);
     }
 
-    protected createOutputStageConnector(connector: ProjectDatabaseConnector): Promise<StageTableConnector> {
+    protected createOutputStageConnector(connector: ProjectDatabaseConnector): Promise<SchedulerStageTableConnector> {
         return connector.connectorForStage(this._pipelineStage);
     }
 
     protected async createTables(connector: ProjectDatabaseConnector) {
         if (await super.createTables(connector)) {
+            /*
             const project = await this.getProject();
             if (this._pipelineStage.previous_stage_id === null) {
                 this._inputStageConnector = await connector.connectorForProject();
@@ -46,6 +46,7 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
                 const stage = await PipelineStage.findByPk(this._pipelineStage.previous_stage_id);
                 this._inputStageConnector = await connector.connectorForStage(stage);
             }
+            */
         } else {
             return false;
         }
@@ -63,7 +64,7 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
         // If not, search database for newly available to-process and put in to-process queue.  Skip count is used
         // to periodically force an update even if there are some in queue so that displayed counts get updated.
         if (!available || this._knownInputSkipCheckCount >= MAX_KNOWN_INPUT_SKIP_COUNT) {
-            let knownInput = await this._inputStageConnector.loadTiles();
+            let knownInput = await this._outputStageConnector.loadInputTiles();
 
             // Update the database with the completion status of tiles from the previous stage.  This essentially
             // converts this_stage_status from the previous stage id table to prev_stage_status for this stage.
@@ -136,13 +137,13 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
             let stillLookingForTilesForWorker = await this.queue(waitingToProcess, async (toProcessTile: ToProcessTile) => {
                 // Return true to continue searching for an available worker and false if the task is launched.
                 try {
-                    const pipelineTile = await this._outputStageConnector.loadTile({relative_path: toProcessTile[DefaultPipelineIdKey]});
+                    const pipelineTile = await this._outputStageConnector.loadTileWithOptions({relative_path: toProcessTile.relative_path});
 
-                    const inputTile = await this._inputStageConnector.loadTile({relative_path: toProcessTile[DefaultPipelineIdKey]});
+                    const inputTile = await this._outputStageConnector.loadInputTile({relative_path: toProcessTile.relative_path});
 
                     // Verify the state is still complete.  The previous stage status is only update once every N times
                     // through scheduling of work.
-                    if (inputTile.this_stage_status !== TilePipelineStatus.Complete) {
+                    if (inputTile.stage_status !== TilePipelineStatus.Complete) {
                         // Will eventually get cleaned up in overall tile update.
                         debug("input tile is no longer marked complete");
                         return true;
@@ -156,7 +157,8 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
 
                     let taskExecutionInput: ITaskExecution = await createTaskExecutionWithInput(worker, task, {
                         pipelineStageId: this._pipelineStage.id,
-                        tileId: pipelineTile.relative_path,
+                        tileId: pipelineTile.id,
+                        relativePath: pipelineTile.relative_path,
                         outputPath,
                         logFile
                     });
@@ -178,7 +180,7 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
                         if (startTaskResponse.taskExecution.execution_status_code === ExecutionStatus.Completed) {
                             // Failed immediately - do not put in inProcess table or list as processing.  Expecting
                             // a complete message in message queue that has likely already arrived.
-                            pipelineTile.this_stage_status = TilePipelineStatus.Failed;
+                            pipelineTile.stage_status = TilePipelineStatus.Failed;
 
                             await pipelineTile.save();
 
@@ -196,6 +198,8 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
                             }));
 
                             await this._outputStageConnector.insertInProcessTile({
+                                stage_id: this._sourceId,
+                                tile_id: pipelineTile.id,
                                 relative_path: pipelineTile.relative_path,
                                 worker_id: worker.id,
                                 worker_last_seen: now,
@@ -203,7 +207,7 @@ export abstract class StagePipelineScheduler extends BasePipelineScheduler {
                                 worker_task_execution_id: responseExecution.id
                             });
 
-                            pipelineTile.this_stage_status = TilePipelineStatus.Processing;
+                            pipelineTile.stage_status = TilePipelineStatus.Processing;
 
                             await pipelineTile.save();
 

@@ -1,9 +1,9 @@
 import {HttpLink} from "apollo-link-http";
 import {ApolloClient} from "apollo-client";
 import {InMemoryCache} from "apollo-cache-inmemory";
-import {WorkerTaskExecution} from "../data-model/workerTaskExecution";
-import {PipelineWorker, PipelineWorkerStatus} from "../data-model/pipelineWorker";
-import {ITaskExecution} from "../data-model/taskExecution";
+import {WorkerTaskExecution} from "../data-model/system/workerTaskExecution";
+import {PipelineWorker, PipelineWorkerStatus} from "../data-model/system/pipelineWorker";
+import {ITaskExecution} from "../data-model/activity/taskExecution";
 
 const gql = require("graphql-tag");
 

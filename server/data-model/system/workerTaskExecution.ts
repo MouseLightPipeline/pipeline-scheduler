@@ -1,4 +1,4 @@
-import {CompletionResult, ExecutionStatus, SyncStatus} from "./taskExecution";
+import {CompletionResult, ExecutionStatus, SyncStatus} from "../activity/taskExecution";
 
 export type WorkerTaskExecution = {
     id: string;
@@ -6,7 +6,7 @@ export type WorkerTaskExecution = {
     remote_task_execution_id: string;
     tile_id: string;
     task_definition_id: string;
-    pipeline_stage_id: string;
+    stage_id: string;
     queue_type: number;
     local_work_units: number;
     cluster_work_units: number;

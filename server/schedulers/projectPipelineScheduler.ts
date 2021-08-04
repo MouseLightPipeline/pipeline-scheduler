@@ -1,3 +1,5 @@
+import {IPipelineTile, PipelineTile} from "../data-model/activity/pipelineTile";
+
 const fse = require("fs-extra");
 const path = require("path");
 import * as _ from "lodash";
@@ -10,14 +12,14 @@ const tileStatusJsonFile = "pipeline-storage.json";
 const tileStatusLastJsonFile = tileStatusJsonFile + ".last";
 
 import {
-    BasePipelineScheduler, DefaultPipelineIdKey, TilePipelineStatus, IMuxTileLists
+    BasePipelineScheduler, TilePipelineStatus, IMuxTileLists
 } from "./basePipelineScheduler";
-import {Project, ProjectInputSourceState} from "../data-model/project";
-import {IPipelineTile, PipelineTile, StageTableConnector} from "../data-access/sequelize/stageTableConnector";
-import {ProjectDatabaseConnector} from "../data-access/sequelize/projectDatabaseConnector";
+import {Project, ProjectInputSourceState} from "../data-model/system/project";
+import {SchedulerStageTableConnector} from "../data-access/activity/schedulerStageTableConnector";
+import {ProjectDatabaseConnector} from "../data-access/activity/projectDatabaseConnector";
 import {ServiceOptions} from "../options/serverOptions";
 import {PipelineApiClient} from "../graphql/pipelineApiClient";
-import {PipelineStage} from "../data-model/pipelineStage";
+import {PipelineStage} from "../data-model/system/pipelineStage";
 
 interface IPosition {
     x: number;
@@ -59,7 +61,7 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
         return this.getProject();
     }
 
-    protected createOutputStageConnector(connector: ProjectDatabaseConnector): Promise<StageTableConnector> {
+    protected createOutputStageConnector(connector: ProjectDatabaseConnector): Promise<SchedulerStageTableConnector> {
         return connector.connectorForProject();
     }
 
@@ -89,11 +91,11 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
             return;
         }
 
-        const toInsert: PipelineTile[] = _.differenceBy(knownInput, knownOutput, DefaultPipelineIdKey);
+        const toInsert: PipelineTile[] = _.differenceBy(knownInput, knownOutput, "relative_path");
 
-        const toUpdate: PipelineTile[] = _.intersectionBy(knownInput, knownOutput, DefaultPipelineIdKey);
+        const toUpdate: PipelineTile[] = _.intersectionBy(knownInput, knownOutput, "relative_path");
 
-        sorted.toDelete = _.differenceBy(knownOutput, knownInput, DefaultPipelineIdKey).map(t => t.relative_path);
+        sorted.toDelete = _.differenceBy(knownOutput, knownInput, "relative_path").map(t => t.relative_path);
 
         sorted.toInsert = toInsert.map(inputTile => {
             const now = new Date();
@@ -122,8 +124,7 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
             if (!tileEqual(existingTile, inputTile)) {
                 existingTile.tile_name = inputTile.tile_name;
                 existingTile.index = inputTile.index;
-                existingTile.prev_stage_status = inputTile.prev_stage_status;
-                existingTile.this_stage_status = inputTile.this_stage_status;
+                existingTile.stage_status = inputTile.stage_status;
                 existingTile.lat_x = inputTile.lat_x;
                 existingTile.lat_y = inputTile.lat_y;
                 existingTile.lat_z = inputTile.lat_z;
@@ -146,7 +147,7 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
 
         ServiceOptions.driveMapping.map(d => {
             if (root.startsWith(d.remote)) {
-                root = d.local + root.slice(d.remote.length);
+                root = path.join(d.local, root.slice(d.remote.length));
             }
         });
 
@@ -242,11 +243,11 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
             let step = tile.step || {x: null, y: null, z: null};
 
             tiles.push({
+                stage_id: project.id,
                 relative_path: normalizedPath,
                 index: tile.id == null ? null : tile.id,
                 tile_name: tileName || "",
-                prev_stage_status: tile.isComplete ? TilePipelineStatus.Complete : TilePipelineStatus.Incomplete,
-                this_stage_status: tile.isComplete ? TilePipelineStatus.Complete : TilePipelineStatus.Incomplete,
+                stage_status: tile.isComplete ? TilePipelineStatus.Complete : TilePipelineStatus.Incomplete,
                 lat_x: position.x,
                 lat_y: position.y,
                 lat_z: position.z,
@@ -290,11 +291,11 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
                     let step = tile.contents.latticeStep || {x: null, y: null, z: null};
 
                     tiles.push({
+                        stage_id: project.id,
                         relative_path: normalizedPath,
                         index: tile.id == null ? null : tile.id,
                         tile_name: tileName || "",
-                        prev_stage_status: tile.isComplete ? TilePipelineStatus.Complete : TilePipelineStatus.Incomplete,
-                        this_stage_status: tile.isComplete ? TilePipelineStatus.Complete : TilePipelineStatus.Incomplete,
+                        stage_status: tile.isComplete ? TilePipelineStatus.Complete : TilePipelineStatus.Incomplete,
                         lat_x: position.x,
                         lat_y: position.y,
                         lat_z: position.z,
@@ -311,5 +312,5 @@ export class ProjectPipelineScheduler extends BasePipelineScheduler {
 }
 
 function tileEqual(a: PipelineTile, b: PipelineTile) {
-    return a.prev_stage_status === b.this_stage_status && a.lat_z === b.lat_z && a.step_z === b.step_z;
+    return a.lat_z === b.lat_z && a.step_z === b.step_z;
 }

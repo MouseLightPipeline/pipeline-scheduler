@@ -8,7 +8,7 @@ import {SchedulerHub} from "./schedulers/schedulerHub";
 import {ServiceOptions} from "./options/serverOptions";
 import {MetricsConnector} from "./data-access/metrics/metricsConnector";
 import {MainQueue} from "./message-queue/mainQueue";
-import {RemoteDatabaseClient} from "./data-access/sequelize/databaseConnector";
+import {RemoteDatabaseClient} from "./data-access/system/databaseConnector";
 
 start().then().catch((err) => debug(err));
 

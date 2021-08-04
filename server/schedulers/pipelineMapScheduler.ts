@@ -1,14 +1,13 @@
 import * as _ from "lodash";
-const {performance} = require("perf_hooks");
 
 const debug = require("debug")("pipeline:scheduler:map-scheduler");
 
-import {PipelineStage} from "../data-model/pipelineStage";
+import {PipelineStage} from "../data-model/system/pipelineStage";
 
 import {StagePipelineScheduler} from "./stagePipelineScheduler";
-import {PipelineTile} from "../data-access/sequelize/stageTableConnector";
-import {DefaultPipelineIdKey, IMuxTileLists, TilePipelineStatus} from "./basePipelineScheduler";
-import {Project} from "../data-model/project";
+import {IMuxTileLists, TilePipelineStatus} from "./basePipelineScheduler";
+import {Project} from "../data-model/system/project";
+import {PipelineTile} from "../data-model/activity/pipelineTile";
 
 export class PipelineMapScheduler extends StagePipelineScheduler {
 
@@ -24,21 +23,21 @@ export class PipelineMapScheduler extends StagePipelineScheduler {
             toDelete: []
         };
 
-        const toInsert = _.differenceBy(knownInput, knownOutput, DefaultPipelineIdKey);
+        const toInsert = _.differenceBy(knownInput, knownOutput, "relative_path");
 
-        const toUpdate = _.intersectionBy(knownInput, knownOutput, DefaultPipelineIdKey);
+        const toUpdate = _.intersectionBy(knownInput, knownOutput, "relative_path");
 
-        sorted.toDelete = _.differenceBy(knownOutput, knownInput, DefaultPipelineIdKey).map(t => t.relative_path);
+        sorted.toDelete = _.differenceBy(knownOutput, knownInput, "relative_path").map(t => t.relative_path);
 
         sorted.toInsert = toInsert.map(inputTile => {
             const now = new Date();
 
             return {
+                stage_id: this._sourceId,
                 relative_path: inputTile.relative_path,
                 index: inputTile.index,
                 tile_name: inputTile.tile_name,
-                prev_stage_status: inputTile.this_stage_status,
-                this_stage_status: TilePipelineStatus.Incomplete,
+                stage_status: TilePipelineStatus.Incomplete,
                 lat_x: inputTile.lat_x,
                 lat_y: inputTile.lat_y,
                 lat_z: inputTile.lat_z,
@@ -66,14 +65,13 @@ export class PipelineMapScheduler extends StagePipelineScheduler {
                 return null;
             }
 
-            if (existingTile.prev_stage_status !== inputTile.this_stage_status || existingTile.lat_z !== inputTile.lat_z || existingTile.step_z !== inputTile.step_z) {
-                if (existingTile.this_stage_status === TilePipelineStatus.Queued && inputTile.this_stage_status !== TilePipelineStatus.Complete) {
+            if (existingTile.lat_z !== inputTile.lat_z || existingTile.step_z !== inputTile.step_z) {
+                if (existingTile.stage_status === TilePipelineStatus.Queued && inputTile.stage_status !== TilePipelineStatus.Complete) {
                     sorted.toReset.push(existingTile);
                 }
 
                 existingTile.tile_name = inputTile.tile_name;
                 existingTile.index = inputTile.index;
-                existingTile.prev_stage_status = inputTile.this_stage_status;
                 existingTile.lat_x = inputTile.lat_x;
                 existingTile.lat_y = inputTile.lat_y;
                 existingTile.lat_z = inputTile.lat_z;

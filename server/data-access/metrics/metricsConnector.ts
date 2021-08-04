@@ -1,10 +1,10 @@
-import {PipelineWorker} from "../../data-model/pipelineWorker";
+import {PipelineWorker} from "../../data-model/system/pipelineWorker";
 
 const Influx = require("influx");
 
 import {MetricsOptions} from "../../options/coreServicesOptions";
-import {TaskExecution} from "../../data-model/taskExecution";
-import {WorkerTaskExecution} from "../../data-model/workerTaskExecution";
+import {TaskExecution} from "../../data-model/activity/taskExecution";
+import {WorkerTaskExecution} from "../../data-model/system/workerTaskExecution";
 
 const debug = require("debug")("pipeline:coordinator-api:metrics-database");
 
@@ -51,7 +51,7 @@ export class MetricsConnector {
                     worker_id: taskExecution.worker_id,
                         worker_name: worker.name,
                         task_id: taskExecution.task_definition_id,
-                        pipeline_stage_id: taskExecution.pipeline_stage_id
+                        pipeline_stage_id: taskExecution.stage_id
                 };
 
                 await this.taskExecutionDatabase.writePoints([

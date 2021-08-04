@@ -28,7 +28,7 @@ export class RemoteDatabaseClient {
     private createConnection(options: Options) {
         this._connection = new Sequelize(options.database, options.username, options.password, options);
 
-        this.loadModels(path.normalize(path.join(__dirname, "..", "..", "data-model")));
+        this.loadModels(path.normalize(path.join(__dirname, "..", "..", "data-model/system")));
     }
 
     private async authenticate(name: string) {

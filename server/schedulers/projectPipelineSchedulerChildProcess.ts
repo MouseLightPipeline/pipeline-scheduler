@@ -1,5 +1,5 @@
 import {ProjectPipelineScheduler} from "./projectPipelineScheduler";
-import {Project} from "../data-model/project";
+import {Project} from "../data-model/system/project";
 
 const debug = require("debug")("pipeline:scheduler:tile-status-worker-process");
 

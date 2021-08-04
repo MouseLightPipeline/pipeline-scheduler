@@ -2,21 +2,16 @@ import * as _ from "lodash";
 
 import {
     TilePipelineStatus,
-    DefaultPipelineIdKey,
     IMuxTileLists
 } from "./basePipelineScheduler";
 import {StagePipelineScheduler} from "./stagePipelineScheduler";
-import {
-    AdjacentTile,
-    AdjacentTileStageConnector,
-    IAdjacentTile
-} from "../data-access/sequelize/adjacentTileStageConnector";
-import {Project} from "../data-model/project";
-import {PipelineStage, PipelineStageMethod} from "../data-model/pipelineStage";
-import {PipelineTile} from "../data-access/sequelize/stageTableConnector";
-import {TaskDefinition} from "../data-model/taskDefinition";
-import {TaskExecution} from "../data-model/taskExecution";
-import {PipelineWorker} from "../data-model/pipelineWorker";
+import {Project} from "../data-model/system/project";
+import {PipelineStage, PipelineStageMethod} from "../data-model/system/pipelineStage";
+import {TaskDefinition} from "../data-model/system/taskDefinition";
+import {TaskExecution} from "../data-model/activity/taskExecution";
+import {PipelineWorker} from "../data-model/system/pipelineWorker";
+import {PipelineTile} from "../data-model/activity/pipelineTile";
+import {AdjacentTile, IAdjacentTile} from "../data-model/activity/adjacentTileMap";
 
 
 interface IMuxUpdateLists extends IMuxTileLists {
@@ -32,16 +27,8 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
         super(pipelineStage, project);
     }
 
-    public set AdjacentTileDelta(delta: number) {
-        this._adjacentTileDelta = delta;
-    }
-
-    public get OutputStageConnector(): AdjacentTileStageConnector {
-        return this._outputStageConnector as AdjacentTileStageConnector;
-    }
-
     protected async getTaskContext(tile: PipelineTile): Promise<AdjacentTile> {
-        return this.OutputStageConnector.loadAdjacentTile(tile.relative_path);
+        return this._outputStageConnector.loadAdjacentTile(tile.id);
     }
 
     protected mapTaskArgumentParameter(project: Project, valueLowerCase: string, task: TaskDefinition, taskExecution: TaskExecution, worker: PipelineWorker, tile: PipelineTile, context: AdjacentTile): string {
@@ -59,6 +46,7 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
 
     private async findAdjacentLayerTile(project: Project, inputTile: PipelineTile): Promise<PipelineTile> {
         let where = null;
+
         switch (this._pipelineStage.function_type) {
             case PipelineStageMethod.XAdjacentTileComparison:
                 where = {
@@ -93,7 +81,7 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
                 break;
         }
 
-        return where ? await this._inputStageConnector.loadTile(where) : null;
+        return where ? await this._outputStageConnector.loadInputTile(where) : null;
     }
 
     protected async muxInputOutputTiles(project: Project, knownInput: PipelineTile[], knownOutput: PipelineTile[]) {
@@ -117,13 +105,13 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
         }, {});
 
         // List of tiles where we already know the previous layer tile id.
-        const adjacentMapRows = await this.OutputStageConnector.loadAdjacentTiles();
+        const adjacentMapRows = await this._outputStageConnector.loadAdjacentTiles();
         const adjacentMapIdLookup = adjacentMapRows.reduce((p, t) => {
             p[t.relative_path] = t;
             return p;
         }, {});
 
-        muxUpdateLists.toDelete = _.differenceBy(knownOutput, knownInput, DefaultPipelineIdKey).map(t => t.relative_path);
+        muxUpdateLists.toDelete = _.differenceBy(knownOutput, knownInput, "relative_path").map(t => t.relative_path);
 
         // Force serial execution of each tile given async calls within function.
         await knownInput.reduce(async (promiseChain, inputTile) => {
@@ -132,9 +120,9 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
             });
         }, Promise.resolve());
 
-        await this.OutputStageConnector.insertAdjacent(muxUpdateLists.toInsertAdjacentMapIndex);
+        await this._outputStageConnector.insertAdjacent(muxUpdateLists.toInsertAdjacentMapIndex);
 
-        await this.OutputStageConnector.deleteAdjacent(muxUpdateLists.toDeleteAdjacentMapIndex);
+        await this._outputStageConnector.deleteAdjacent(muxUpdateLists.toDeleteAdjacentMapIndex);
 
         // Insert, update, delete handled by base.
         return muxUpdateLists;
@@ -197,13 +185,13 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
         // We can only be in this block if the adjacent tile exists.  If the adjacent tile does not exist, the tile
         // effectively does not exist for this stage.
         if (adjacentInputTile !== null) {
-            if ((inputTile.this_stage_status === TilePipelineStatus.Failed) || (adjacentInputTile.this_stage_status === TilePipelineStatus.Failed)) {
+            if ((inputTile.stage_status === TilePipelineStatus.Failed) || (adjacentInputTile.stage_status === TilePipelineStatus.Failed)) {
                 prev_status = TilePipelineStatus.Failed;
-            } else if ((inputTile.this_stage_status === TilePipelineStatus.Canceled) || (adjacentInputTile.this_stage_status === TilePipelineStatus.Canceled)) {
+            } else if ((inputTile.stage_status === TilePipelineStatus.Canceled) || (adjacentInputTile.stage_status === TilePipelineStatus.Canceled)) {
                 prev_status = TilePipelineStatus.Canceled;
             } else {
                 // This works because once you drop failed and canceled, the highest value is complete.
-                prev_status = Math.min(inputTile.this_stage_status, adjacentInputTile.this_stage_status);
+                prev_status = Math.min(inputTile.stage_status, adjacentInputTile.stage_status);
             }
         } else {
             this_status = TilePipelineStatus.DoesNotExist;
@@ -213,36 +201,35 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
             // If the previous stage is in the middle of processing, maintain the current status - nothing has
             // changed (we don't kill a running task because a tile has been curated - it will be removed when done).
             // Otherwise. something reset on the last stage tile and need to go back to incomplete.
-            if (existingOutput.this_stage_status !== TilePipelineStatus.Processing) {
+            if (existingOutput.stage_status !== TilePipelineStatus.Processing) {
                 // In all cases but the above, if this has been marked does not exist above due to previous stage info
                 // that is the final answer.
                 if (this_status !== TilePipelineStatus.DoesNotExist) {
-                    if ((prev_status !== TilePipelineStatus.DoesNotExist) && (existingOutput.this_stage_status === TilePipelineStatus.DoesNotExist)) {
+                    if ((prev_status !== TilePipelineStatus.DoesNotExist) && (existingOutput.stage_status === TilePipelineStatus.DoesNotExist)) {
                         // It was considered does not exist (maybe the adjacent tile had not been acquired yet), but now there is a
                         // legit value for the previous stage, so upgrade to incomplete.
                         this_status = TilePipelineStatus.Incomplete;
-                    } else if (inputTile.this_stage_status !== TilePipelineStatus.Complete) {
+                    } else if (inputTile.stage_status !== TilePipelineStatus.Complete) {
                         // If this is a regression in the previous stage, this needs to be reverted to incomplete.
                         this_status = TilePipelineStatus.Incomplete;
                     } else {
                         // Otherwise no change.
-                        this_status = existingOutput.this_stage_status;
+                        this_status = existingOutput.stage_status;
                     }
                 } else {
                 }
             } else {
-                this_status = existingOutput.this_stage_status;
+                this_status = existingOutput.tstage_status;
             }
 
-            if (existingOutput.prev_stage_status !== prev_status || existingOutput.this_stage_status !== this_status || existingOutput.lat_z !== inputTile.lat_z || existingOutput.step_z !== inputTile.step_z) {
-                if (existingOutput.this_stage_status === TilePipelineStatus.Queued && inputTile.this_stage_status !== TilePipelineStatus.Complete) {
+            if (existingOutput.stage_status !== this_status || existingOutput.lat_z !== inputTile.lat_z || existingOutput.step_z !== inputTile.step_z) {
+                if (existingOutput.stage_status === TilePipelineStatus.Queued && inputTile.stage_status !== TilePipelineStatus.Complete) {
                     muxUpdateLists.toReset.push(existingOutput);
                 }
 
                 existingOutput.index = inputTile.index;
                 existingOutput.tile_name = inputTile.tile_name;
-                existingOutput.prev_stage_status = prev_status;
-                existingOutput.this_stage_status = this_status;
+                existingOutput.stage_status = this_status;
                 existingOutput.lat_x = inputTile.lat_x;
                 existingOutput.lat_y = inputTile.lat_y;
                 existingOutput.lat_z = inputTile.lat_z;
@@ -254,14 +241,12 @@ export class PipelineAdjacentScheduler extends StagePipelineScheduler {
                 muxUpdateLists.toUpdate.push(existingOutput);
             }
         } else {
-            let now = new Date();
-
             muxUpdateLists.toInsert.push({
+                    stage_id: this._sourceId,
                     relative_path: inputTile.relative_path,
                     index: inputTile.index,
                     tile_name: inputTile.tile_name,
-                    prev_stage_status: prev_status,
-                    this_stage_status: this_status,
+                    stage_status: this_status,
                     lat_x: inputTile.lat_x,
                     lat_y: inputTile.lat_y,
                     lat_z: inputTile.lat_z,

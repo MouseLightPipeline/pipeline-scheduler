@@ -7,16 +7,16 @@ const debug = require("debug")("pipeline:scheduler:scheduler-hub");
 
 import {startTileStatusFileWorker} from "./projectPipelineSchedulerChildProcess";
 import {startMapPipelineStageWorker} from "./pipelineMapSchedulerChildProcess";
-import {Project} from "../data-model/project";
-import {PipelineStage, PipelineStageMethod} from "../data-model/pipelineStage";
-import {WorkerTaskExecution} from "../data-model/workerTaskExecution";
+import {Project} from "../data-model/system/project";
+import {PipelineStage, PipelineStageMethod} from "../data-model/system/pipelineStage";
+import {WorkerTaskExecution} from "../data-model/system/workerTaskExecution";
 
 export interface ISchedulerInterface {
     IsExitRequested: boolean;
     IsProcessingRequested: boolean;
 
     onTaskExecutionComplete(executionInfo: WorkerTaskExecution): Promise<void>;
-    onTaskExecutionUpdate(executionInfo: WorkerTaskExecution): Promise<void>;
+    // onTaskExecutionUpdate(executionInfo: WorkerTaskExecution): Promise<void>;
 }
 
 export class SchedulerHub {
@@ -47,10 +47,10 @@ export class SchedulerHub {
         }
 
         try {
-            const worker = this._pipelineStageWorkers.get(taskExecution.pipeline_stage_id);
+            const worker = this._pipelineStageWorkers.get(taskExecution.stage_id);
 
             if (worker) {
-                await worker.onTaskExecutionUpdate(taskExecution);
+                // await worker.onTaskExecutionUpdate(taskExecution);
                 return true;
             }
         } catch (err) {
@@ -62,13 +62,13 @@ export class SchedulerHub {
 
     public async onTaskExecutionComplete(taskExecution: WorkerTaskExecution) {
         try {
-            const worker = this._pipelineStageWorkers.get(taskExecution.pipeline_stage_id);
+            const worker = this._pipelineStageWorkers.get(taskExecution.stage_id);
 
             if (worker) {
                 await worker.onTaskExecutionComplete(taskExecution);
                 return true;
             } else {
-                debug(`stage worker for pipeline stage ${taskExecution.pipeline_stage_id} missing for task completion`)
+                debug(`stage worker for pipeline stage ${taskExecution.stage_id} missing for task completion`)
             }
         } catch (err) {
             debug(err);

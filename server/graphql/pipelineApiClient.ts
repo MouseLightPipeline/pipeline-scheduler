@@ -7,7 +7,7 @@ const gql = require("graphql-tag");
 require("isomorphic-fetch");
 
 import {ApiServerOptions} from "../options/coreServicesOptions";
-import {IProjectInput, ProjectInputSourceState} from "../data-model/project";
+import {IProjectInput, ProjectInputSourceState} from "../data-model/system/project";
 
 const debug = require("debug")("pipeline:scheduler:pipeline-api-client");
 

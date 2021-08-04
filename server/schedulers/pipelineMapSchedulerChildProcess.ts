@@ -1,5 +1,5 @@
 import {PipelineMapScheduler} from "./pipelineMapScheduler";
-import {PipelineStage} from "../data-model/pipelineStage";
+import {PipelineStage} from "../data-model/system/pipelineStage";
 
 const debug = require("debug")("pipeline:scheduler:pipeline-map-worker-process");
 

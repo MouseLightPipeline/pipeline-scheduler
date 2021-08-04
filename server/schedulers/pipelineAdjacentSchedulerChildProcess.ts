@@ -1,6 +1,6 @@
 import {PipelineAdjacentScheduler} from "./pipelineAdjacentScheduler";
-import {PipelineStage} from "../data-model/pipelineStage";
-import {Project} from "../data-model/project";
+import {PipelineStage} from "../data-model/system/pipelineStage";
+import {Project} from "../data-model/system/project";
 
 const debug = require("debug")("pipeline:scheduler:pipeline-z-comparison-worker-process");
 

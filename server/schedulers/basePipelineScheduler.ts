@@ -3,26 +3,22 @@ import * as _ from "lodash";
 const debug = require("debug")("pipeline:scheduler:base-pipeline-scheduler");
 
 import {ISchedulerInterface} from "./schedulerHub";
-import {Project} from "../data-model/project";
+import {Project} from "../data-model/system/project";
 import {
     CompletionResult,
     ExecutionStatus, ITaskExecution
-} from "../data-model/taskExecution";
+} from "../data-model/activity/taskExecution";
 import {
     connectorForProject,
     ProjectDatabaseConnector
-} from "../data-access/sequelize/projectDatabaseConnector";
-import {
-    IPipelineTile, IToProcessTile,
-    PipelineTile,
-    StageTableConnector
-} from "../data-access/sequelize/stageTableConnector";
-import {PipelineWorker} from "../data-model/pipelineWorker";
-import {PipelineStage} from "../data-model/pipelineStage";
-import {WorkerTaskExecution} from "../data-model/workerTaskExecution";
-import {ITaskArgument, TaskArgumentType, TaskDefinition} from "../data-model/taskDefinition";
-
-export const DefaultPipelineIdKey = "relative_path";
+} from "../data-access/activity/projectDatabaseConnector";
+import {SchedulerStageTableConnector} from "../data-access/activity/schedulerStageTableConnector";
+import {PipelineWorker} from "../data-model/system/pipelineWorker";
+import {PipelineStage} from "../data-model/system/pipelineStage";
+import {WorkerTaskExecution} from "../data-model/system/workerTaskExecution";
+import {ITaskArgument, TaskArgumentType, TaskDefinition} from "../data-model/system/taskDefinition";
+import {IPipelineTile, PipelineTile} from "../data-model/activity/pipelineTile";
+import {IToProcessTile} from "../data-model/activity/toProcessTile";
 
 /**
  * Internal state of a tile within a pipeline stage - used for the state of the previous stage
@@ -50,7 +46,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
 
     protected readonly _sourceId: string;
 
-    protected _outputStageConnector: StageTableConnector;
+    protected _outputStageConnector: SchedulerStageTableConnector;
 
     private _isCancelRequested: boolean;
     private _isProcessingRequested: boolean;
@@ -168,12 +164,14 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
             }
 
             toSchedule = toSchedule.map(obj => {
-                obj.this_stage_status = TilePipelineStatus.Queued;
+                obj.stage_status = TilePipelineStatus.Queued;
                 return obj;
             });
 
             toProcessInsert = toSchedule.map(obj => {
                 return {
+                    stage_id: this._sourceId,
+                    tile_id: obj.id,
                     relative_path: obj.relative_path,
                     lat_x: obj.lat_x,
                     lat_y: obj.lat_y,
@@ -183,7 +181,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
 
             // Update that are already in the toProcess table.
             alreadyInToProcessTable = alreadyInToProcessTable.map(obj => {
-                obj.this_stage_status = TilePipelineStatus.Queued;
+                obj.stage_status = TilePipelineStatus.Queued;
                 return obj
             });
 
@@ -197,6 +195,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         return toProcessInsert.length > 0;
     }
 
+    /*
     public async onTaskExecutionUpdate(executionInfo: WorkerTaskExecution): Promise<void> {
         const localTaskExecution = await this._outputStageConnector.loadTaskExecution(executionInfo.remote_task_execution_id);
 
@@ -221,6 +220,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         // TODO nothing stopping the async here and next method from having this complete after an update goes through.
         await localTaskExecution.update(update);
     }
+     */
 
     public async onTaskExecutionComplete(executionInfo: WorkerTaskExecution): Promise<void> {
         const localTaskExecution = await this._outputStageConnector.loadTaskExecution(executionInfo.remote_task_execution_id);
@@ -232,7 +232,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
             //    there was a good chance this message would come before it was even added.
             const tile = await this._outputStageConnector.loadTileById(executionInfo.tile_id);
 
-            if (tile !== null && tile.this_stage_status === TilePipelineStatus.Processing) {
+            if (tile !== null && tile.stage_status === TilePipelineStatus.Processing) {
                 await this._outputStageConnector.updateTileStatus(executionInfo.tile_id, TilePipelineStatus.Incomplete);
             }
 
@@ -376,7 +376,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         const source = await this.getSource();
 
         if (knownInput.length > 0) {
-            let knownOutput = await this._outputStageConnector.loadTiles({attributes: [DefaultPipelineIdKey, "prev_stage_status", "this_stage_status"]});
+            let knownOutput = await this._outputStageConnector.loadTilesWithAttributes(["id", "relative_path", "stage_status"]);
 
             let sorted = await this.muxInputOutputTiles(project, knownInput, knownOutput);
 
@@ -392,7 +392,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
             // Remove any queued whose previous stage have been reverted.
             if (sorted.toReset.length > 0) {
                 debug(`${sorted.toReset.length} tiles have reverted their status and should be removed from to-process`);
-                await this._outputStageConnector.deleteToProcess(sorted.toReset.map(t => t.relative_path));
+                await this._outputStageConnector.deleteToProcess(sorted.toReset.map(t => t.id));
             }
 
             debug(`${source.name}: ${sorted.toInsert.length} insert, ${sorted.toUpdate.length} update, ${sorted.toDelete.length} delete, ${sorted.toReset.length} reset`);
@@ -431,7 +431,7 @@ export abstract class BasePipelineScheduler implements ISchedulerInterface {
         setTimeout(() => this.performWork(), 20 * 1000)
     }
 
-    protected abstract createOutputStageConnector(connector: ProjectDatabaseConnector): Promise<StageTableConnector>;
+    protected abstract createOutputStageConnector(connector: ProjectDatabaseConnector): Promise<SchedulerStageTableConnector>;
 
     protected async createTables(connector: ProjectDatabaseConnector) {
         this._outputStageConnector = await this.createOutputStageConnector(connector);

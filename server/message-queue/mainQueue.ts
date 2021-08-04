@@ -2,7 +2,7 @@ import * as amqp from "amqplib";
 
 import {MessageQueueOptions} from "../options/coreServicesOptions";
 import {Connection, Channel} from "amqplib";
-import {WorkerTaskExecution} from "../data-model/workerTaskExecution";
+import {WorkerTaskExecution} from "../data-model/system/workerTaskExecution";
 import {SchedulerHub} from "../schedulers/schedulerHub";
 import {MetricsConnector} from "../data-access/metrics/metricsConnector";
 
@@ -48,7 +48,7 @@ export class MainQueue {
 
             await this.channel.assertQueue(TaskExecutionCompleteQueue, {durable: true});
 
-            await this.channel.assertQueue(TaskExecutionUpdateQueue, {durable: false});
+            // await this.channel.assertQueue(TaskExecutionUpdateQueue, {durable: false});
 
             await this.channel.prefetch(50);
 
@@ -72,6 +72,7 @@ export class MainQueue {
                 }
             }, {noAck: false});
 
+            /*
             await this.channel.consume(TaskExecutionUpdateQueue, async (msg) => {
                 try {
                     const taskExecution = JSON.parse(msg.content.toString());
@@ -87,6 +88,7 @@ export class MainQueue {
                     debug(err);
                 }
             }, {noAck: false});
+        */
 
             debug(`main queue ready`);
 
